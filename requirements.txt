@@ -1,3 +1,10 @@
 langchain
 langchain-community
 langchain-core
+langchain-openai
+langgraph
+langchain-mcp-adapters
+pydantic
+python-dotenv
+requests
+
