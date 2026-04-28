@@ -1,15 +1,15 @@
 import requests
 from utils import get_setting_config
 
-# 获取env配置
-config = get_setting_config()
 
 def get_weather(city_code: str):
   """为一个城市获取天气信息"""
+  # 获取env配置
+  config = get_setting_config()
   AMAP_WEATHER_URL = "https://restapi.amap.com/v3/weather/weatherInfo"
 
   response = requests.get(AMAP_WEATHER_URL, {
-    "key": config.amap_weather_api_key,
+    "key": config.amap_api_key,
     "city": city_code,
     "extensions": "base"
   })
@@ -26,7 +26,7 @@ def get_posi_by_address(address: str):
   AMAP_GEOCODE_URL = "https://restapi.amap.com/v3/geocode/geo"
 
   response = requests.get(AMAP_GEOCODE_URL, {
-    "key": config.amap_weather_api_key,
+    "key": config.amap_api_key,
     "address": address
   })
   parse = response.json()

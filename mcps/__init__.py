@@ -1,1 +1,1 @@
-from mcps.AMap_mcp import init_amap_mcp
+from mcps.config_loader import McpConfiguration

@@ -1,7 +1,12 @@
 import json
 import os
 from api.AMap import get_weather
+from decorators.tool_auth import tool_auth
 
+@tool_auth(
+  prompt="是否可以获取 '{city_name}' 的天气？(yes/no):",
+  decisions=["yes", "no"]
+)
 def get_weather_tool(city_name: str):
   """为一个城市获取天气信息"""
   city_code = get_city_code(city_name)

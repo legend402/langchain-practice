@@ -1,6 +1,5 @@
 
 from langchain_openai import ChatOpenAI
-import os
 from utils import get_setting_config
 
 def init_deepseek():

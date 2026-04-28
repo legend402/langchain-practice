@@ -2,9 +2,10 @@ langchain
 langchain-community
 langchain-core
 langchain-openai
+langchain-tavily
 langgraph
 langchain-mcp-adapters
 pydantic
 python-dotenv
 requests
-
+pydash

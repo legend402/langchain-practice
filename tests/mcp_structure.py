@@ -1,6 +1,6 @@
 from langchain_core.messages import HumanMessage
 from langchain.agents import create_agent
-from mcps.AMap_mcp import init_amap_mcp
+from mcps.config_loader import McpConfiguration
 from langchain.agents.structured_output import AutoStrategy
 from typing import Union
 from structured import DistanceResult, RoutePlanResult, DefaultResult
@@ -10,7 +10,7 @@ async def mcp_structure_test ():
 	# 初始化大模型
 	llm = init_deepseek()
 	# 加载高德mcp工具
-	amap_tools = await init_amap_mcp().get_tools()
+	amap_tools = await McpConfiguration.load_target_mcp("amap-maps").get_tools()
 	tools = [*amap_tools]
 
 	# 创建智能体
