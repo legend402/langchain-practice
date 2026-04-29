@@ -1,5 +1,6 @@
 
 from langchain.agents import create_agent
+from langchain.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from mcps.config_loader import McpConfiguration
 from models.deepseek import init_deepseek
@@ -20,4 +21,18 @@ async def test_browser_search():
 		system_prompt = "你是一个帮助用户的助手, 回答问题简洁，明了，不说废话",
 	)
   
-  start_chat(agent)
+  """启动聊天"""
+  print('输入 exit 或者 quit 退出')
+  while True:
+    user_input = input("你:")
+    if user_input in { "exit", "quit" }:
+      break
+
+    inputs = {
+      "messages": [HumanMessage(content=user_input)]
+    }
+
+    async for chunk, metadata in agent.astream(input=inputs, stream_mode="messages", config={"configurable":{ "thread_id": "1" }}):
+      print(chunk.content, end="", flush=True)
+
+    print("\n")

@@ -9,3 +9,8 @@ pydantic
 python-dotenv
 requests
 pydash
+PyPDF2
+fastapi
+uvicorn[standard]
+zhipuai
+faiss-cpu

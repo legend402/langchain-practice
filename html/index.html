@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 LangChain知识库系统开发</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #0e1117;
+            color: #fafafa;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            background-color: #262730;
+            border-right: 1px solid #31333f;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .sidebar-content {
+            padding: 1.5rem 1rem;
+        }
+
+        .sidebar-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: #fafafa;
+        }
+
+        .status-box {
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-ready {
+            background-color: rgba(38, 166, 91, 0.15);
+            color: #26a65b;
+            border: 1px solid rgba(38, 166, 91, 0.3);
+        }
+
+        .status-waiting {
+            background-color: rgba(49, 130, 206, 0.15);
+            color: #63b3ed;
+            border: 1px solid rgba(49, 130, 206, 0.3);
+        }
+
+        .divider {
+            height: 1px;
+            background-color: #31333f;
+            margin: 1.25rem 0;
+        }
+
+        .upload-area {
+            border: 2px dashed #4a5568;
+            border-radius: 0.5rem;
+            padding: 2rem 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+
+        .upload-area:hover {
+            border-color: #63b3ed;
+            background-color: rgba(99, 179, 237, 0.05);
+        }
+
+        .upload-area.dragover {
+            border-color: #63b3ed;
+            background-color: rgba(99, 179, 237, 0.1);
+        }
+
+        .upload-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-text {
+            font-size: 0.9rem;
+            color: #a0aec0;
+        }
+
+        .upload-hint {
+            font-size: 0.75rem;
+            color: #718096;
+            margin-top: 0.5rem;
+        }
+
+        .file-list {
+            margin-bottom: 1rem;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0.75rem;
+            background-color: #1a1d24;
+            border-radius: 0.375rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .file-name {
+            color: #e2e8f0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+
+        .file-remove {
+            color: #fc8181;
+            cursor: pointer;
+            margin-left: 0.5rem;
+            font-size: 1.1rem;
+            line-height: 1;
+        }
+
+        .file-remove:hover {
+            color: #f56565;
+        }
+
+        .process-btn {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .process-btn:hover:not(:disabled) {
+            background-color: #1d4ed8;
+        }
+
+        .process-btn:disabled {
+            background-color: #4a5568;
+            color: #a0aec0;
+            cursor: not-allowed;
+        }
+
+        .process-btn.processing {
+            background-color: #d69e2e;
+            cursor: wait;
+        }
+
+        /* Expander */
+        .expander {
+            margin-top: 1.5rem;
+            border: 1px solid #31333f;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+
+        .expander-header {
+            padding: 0.75rem 1rem;
+            background-color: #1a1d24;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.95rem;
+            user-select: none;
+        }
+
+        .expander-header:hover {
+            background-color: #23262e;
+        }
+
+        .expander-icon {
+            transition: transform 0.2s;
+            font-size: 0.8rem;
+        }
+
+        .expander.open .expander-icon {
+            transform: rotate(180deg);
+        }
+
+        .expander-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            background-color: #0e1117;
+        }
+
+        .expander.open .expander-content {
+            max-height: 500px;
+        }
+
+        .expander-body {
+            padding: 1rem;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: #cbd5e0;
+        }
+
+        .expander-body ol {
+            margin-left: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .expander-body li {
+            margin-bottom: 0.5rem;
+        }
+
+        .expander-body ul {
+            margin-left: 1.25rem;
+            list-style-type: disc;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem 3rem;
+        }
+
+        .page-header {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            color: #fafafa;
+        }
+
+        /* Two column layout */
+        .top-section {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .status-col {
+            display: flex;
+            align-items: center;
+        }
+
+        .warning-box {
+            background-color: rgba(214, 158, 46, 0.15);
+            border: 1px solid rgba(214, 158, 46, 0.3);
+            color: #ecc94b;
+            padding: 1rem 1.25rem;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+            width: 100%;
+        }
+
+        .success-box {
+            background-color: rgba(38, 166, 91, 0.15);
+            border: 1px solid rgba(38, 166, 91, 0.3);
+            color: #26a65b;
+            padding: 1rem 1.25rem;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+            width: 100%;
+        }
+
+        .action-col {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .clear-btn {
+            padding: 0.75rem 1.25rem;
+            background-color: transparent;
+            color: #fc8181;
+            border: 1px solid #fc8181;
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .clear-btn:hover {
+            background-color: rgba(252, 129, 129, 0.1);
+        }
+
+        /* Question Input */
+        .question-section {
+            margin-bottom: 2rem;
+        }
+
+        .input-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+            color: #e2e8f0;
+        }
+
+        .question-input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background-color: #262730;
+            border: 1px solid #4a5568;
+            border-radius: 0.5rem;
+            color: #fafafa;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        .question-input::placeholder {
+            color: #718096;
+        }
+
+        .question-input:focus {
+            outline: none;
+            border-color: #63b3ed;
+        }
+
+        .question-input:disabled {
+            background-color: #1a1d24;
+            color: #718096;
+            cursor: not-allowed;
+        }
+
+        /* Chat / Response Area */
+        .chat-area {
+            margin-top: 1.5rem;
+        }
+
+        .message {
+            margin-bottom: 1rem;
+            padding: 1rem 1.25rem;
+            border-radius: 0.5rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .user-message {
+            background-color: #2563eb;
+            color: white;
+            margin-left: 2rem;
+        }
+
+        .ai-message {
+            background-color: #262730;
+            border: 1px solid #31333f;
+            color: #e2e8f0;
+            margin-right: 2rem;
+        }
+
+        .message-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            opacity: 0.8;
+        }
+
+        .thinking {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: #a0aec0;
+            font-style: italic;
+            padding: 1rem;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #4a5568;
+            border-top-color: #63b3ed;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 1.5rem;
+            right: 1.5rem;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .toast {
+            padding: 1rem 1.25rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 280px;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(100%); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .toast-success {
+            background-color: #26a65b;
+            color: white;
+        }
+
+        .toast-error {
+            background-color: #e53e3e;
+            color: white;
+        }
+
+        .toast-warning {
+            background-color: #d69e2e;
+            color: #1a202c;
+        }
+
+        .toast-info {
+            background-color: #3182ce;
+            color: white;
+        }
+
+        /* Info text below process button */
+        .info-text {
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background-color: rgba(49, 130, 206, 0.15);
+            border: 1px solid rgba(49, 130, 206, 0.3);
+            border-radius: 0.375rem;
+            color: #63b3ed;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Balloons animation */
+        .balloons {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 999;
+            overflow: hidden;
+        }
+
+        .balloon {
+            position: absolute;
+            bottom: -100px;
+            width: 40px;
+            height: 50px;
+            border-radius: 50% 50% 50% 50%;
+            animation: floatUp 3s ease-in forwards;
+            opacity: 0.8;
+        }
+
+        .balloon::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            width: 2px;
+            height: 20px;
+            background-color: inherit;
+            transform: translateX(-50%);
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) rotate(0deg); opacity: 0.8; }
+            100% { transform: translateY(-120vh) rotate(20deg); opacity: 0; }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                max-height: 50vh;
+                border-right: none;
+                border-bottom: 1px solid #31333f;
+            }
+            .main-content {
+                padding: 1.5rem;
+            }
+            .top-section {
+                grid-template-columns: 1fr;
+            }
+            .action-col {
+                justify-content: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-content">
+                <h2 class="sidebar-title">📁 文档管理</h2>
+
+                <!-- Status -->
+                <div id="dbStatus" class="status-box status-waiting">
+                    <span>📝</span>
+                    <span>状态：等待上传PDF</span>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- File Upload -->
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📎</div>
+                    <div class="upload-text">点击或拖拽上传PDF文件</div>
+                    <div class="upload-hint">支持上传多个PDF文件</div>
+                    <input type="file" id="fileInput" accept=".pdf" multiple style="display: none;">
+                </div>
+
+                <!-- File List -->
+                <div class="file-list" id="fileList"></div>
+
+                <!-- Process Button -->
+                <button class="process-btn" id="processBtn" disabled>
+                    <span>🚀</span>
+                    <span>提交并处理</span>
+                </button>
+
+                <div id="processInfo"></div>
+
+                <!-- Usage Instructions -->
+                <div class="expander" id="expander">
+                    <div class="expander-header" onclick="toggleExpander()">
+                        <span>💡 使用说明</span>
+                        <span class="expander-icon">▼</span>
+                    </div>
+                    <div class="expander-content">
+                        <div class="expander-body">
+                            <strong>步骤：</strong>
+                            <ol>
+                                <li>📎 上传一个或多个PDF文件</li>
+                                <li>🚀 点击"提交并处理"处理文档</li>
+                                <li>💬 在主页面输入您的问题</li>
+                                <li>🤖 AI将基于PDF内容回答问题</li>
+                            </ol>
+                            <strong>提示：</strong>
+                            <ul>
+                                <li>支持多个PDF文件同时上传</li>
+                                <li>处理大文件可能需要一些时间</li>
+                                <li>可以随时清除数据库重新开始</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <h1 class="page-header">🤖 LangChain知识库系统开发</h1>
+
+            <!-- Top Section: Status & Clear -->
+            <div class="top-section">
+                <div class="status-col">
+                    <div id="mainStatus" class="warning-box">
+                        <span>⚠️</span>
+                        <span>请先上传并处理PDF文件</span>
+                    </div>
+                </div>
+                <div class="action-col">
+                    <button class="clear-btn" id="clearBtn">
+                        <span>🗑️</span>
+                        <span>清除数据库</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Question Input -->
+            <div class="question-section">
+                <label class="input-label">
+                    <span>💬</span>
+                    <span>请输入问题</span>
+                </label>
+                <input 
+                    type="text" 
+                    class="question-input" 
+                    id="questionInput"
+                    placeholder="例如：这个文档的主要内容是什么？"
+                    disabled
+                >
+            </div>
+
+            <!-- Chat / Response Area -->
+            <div class="chat-area" id="chatArea"></div>
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Balloons Container -->
+    <div class="balloons" id="balloons"></div>
+
+    <script>
+        // State
+        let uploadedFiles = [];
+        let dbExists = false;
+        let isProcessing = false;
+
+        // DOM Elements
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const fileList = document.getElementById('fileList');
+        const processBtn = document.getElementById('processBtn');
+        const processInfo = document.getElementById('processInfo');
+        const questionInput = document.getElementById('questionInput');
+        const clearBtn = document.getElementById('clearBtn');
+        const chatArea = document.getElementById('chatArea');
+        const dbStatus = document.getElementById('dbStatus');
+        const mainStatus = document.getElementById('mainStatus');
+        const toastContainer = document.getElementById('toastContainer');
+        const balloons = document.getElementById('balloons');
+
+        // File Upload Handlers
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf');
+            addFiles(files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            addFiles(Array.from(e.target.files));
+            fileInput.value = '';
+        });
+
+        function addFiles(files) {
+            const newFiles = files.filter(f => !uploadedFiles.some(uf => uf.name === f.name));
+            uploadedFiles = [...uploadedFiles, ...newFiles];
+            renderFileList();
+            updateProcessButton();
+        }
+
+        function removeFile(index) {
+            uploadedFiles.splice(index, 1);
+            renderFileList();
+            updateProcessButton();
+        }
+
+        function renderFileList() {
+            if (uploadedFiles.length === 0) {
+                fileList.innerHTML = '';
+                return;
+            }
+            
+            fileList.innerHTML = uploadedFiles.map((file, i) => `
+                <div class="file-item">
+                    <span class="file-name">${i + 1}. ${file.name}</span>
+                    <span class="file-remove" onclick="removeFile(${i})" title="移除">&times;</span>
+                </div>
+            `).join('');
+        }
+
+        function updateProcessButton() {
+            processBtn.disabled = uploadedFiles.length === 0 || isProcessing;
+            if (uploadedFiles.length > 0) {
+                processInfo.innerHTML = `<div class="info-text"><span>📄</span><span>已选择 ${uploadedFiles.length} 个文件</span></div>`;
+            } else {
+                processInfo.innerHTML = '';
+            }
+        }
+
+        // Process Button
+        processBtn.addEventListener('click', async () => {
+            if (uploadedFiles.length === 0 || isProcessing) return;
+
+            isProcessing = true;
+            processBtn.disabled = true;
+            processBtn.classList.add('processing');
+            processBtn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div><span>正在处理...</span>';
+
+            try {
+                const res = await Promise.all(uploadedFiles.map(file => uploadFile(file)));
+                
+                // Simulate vector store creation
+                dbExists = true;
+                updateUIState();
+                showToast('success', '✅ PDF处理完成！现在可以开始提问了');
+                launchBalloons();
+                
+                // Clear file list after successful processing
+                uploadedFiles = [];
+                renderFileList();
+                processInfo.innerHTML = '';
+            } catch (error) {
+                showToast('error', `❌ 处理PDF时出错: ${error.message}`);
+            } finally {
+                isProcessing = false;
+                processBtn.classList.remove('processing');
+                processBtn.innerHTML = '<span>🚀</span><span>提交并处理</span>';
+                updateProcessButton();
+            }
+        });
+
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            return new Promise((resolve, reject) => {
+                fetch('http://127.0.0.1:4030/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(resolve)
+                .catch(reject);
+            })
+        }
+
+        // Clear Database
+        clearBtn.addEventListener('click', () => {
+            if (!dbExists) {
+                showToast('warning', '数据库已经是空状态');
+                return;
+            }
+            
+            dbExists = false;
+            uploadedFiles = [];
+            renderFileList();
+            chatArea.innerHTML = '';
+            questionInput.value = '';
+            updateUIState();
+            showToast('success', '数据库已清除');
+        });
+
+        // Question Input
+        questionInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const question = questionInput.value.trim();
+                if (question) {
+                    askQuestion(question);
+                }
+            }
+        });
+
+        async function askQuestion(question) {
+            if (!dbExists) {
+                showToast('error', '❌ 请先上传并处理PDF文件！');
+                return;
+            }
+
+            // Add user message
+            addMessage('user', question);
+            questionInput.value = '';
+
+            // Show thinking
+            const thinkingId = 'thinking-' + Date.now();
+            chatArea.innerHTML += `
+                <div class="message ai-message" id="${thinkingId}">
+                    <div class="message-label">🤖 AI</div>
+                    <div class="thinking">
+                        <div class="spinner"></div>
+                        <span>AI正在分析文档...</span>
+                    </div>
+                </div>
+            `;
+            chatArea.scrollTop = chatArea.scrollHeight;
+
+            // Simulate AI response
+            await simulateDelay(2000 + Math.random() * 2000);
+
+            // Remove thinking and add response
+            const thinkingEl = document.getElementById(thinkingId);
+            if (thinkingEl) {
+                thinkingEl.innerHTML = `
+                    <div class="message-label">🤖 AI</div>
+                    <div>根据文档内容分析，该文档主要涉及以下几个方面：
+1. 系统架构设计与实现方案
+2. 核心技术选型与集成方式
+3. 知识库构建与向量检索流程
+4. 问答交互与上下文管理机制
+
+如需了解更具体的细节，请告诉我您关注的重点方向。</div>
+                `;
+            }
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function addMessage(sender, text) {
+            const messageClass = sender === 'user' ? 'user-message' : 'ai-message';
+            const label = sender === 'user' ? '👤 用户' : '🤖 AI';
+            chatArea.innerHTML += `
+                <div class="message ${messageClass}">
+                    <div class="message-label">${label}</div>
+                    <div>${escapeHtml(text)}</div>
+                </div>
+            `;
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function updateUIState() {
+            if (dbExists) {
+                dbStatus.className = 'status-box status-ready';
+                dbStatus.innerHTML = '<span>✅</span><span>数据库状态：已就绪</span>';
+                
+                mainStatus.className = 'success-box';
+                mainStatus.innerHTML = '<span>✅</span><span>数据库已就绪，可以开始提问</span>';
+                
+                questionInput.disabled = false;
+            } else {
+                dbStatus.className = 'status-box status-waiting';
+                dbStatus.innerHTML = '<span>📝</span><span>状态：等待上传PDF</span>';
+                
+                mainStatus.className = 'warning-box';
+                mainStatus.innerHTML = '<span>⚠️</span><span>请先上传并处理PDF文件</span>';
+                
+                questionInput.disabled = true;
+            }
+        }
+
+        // Expander Toggle
+        function toggleExpander() {
+            document.getElementById('expander').classList.toggle('open');
+        }
+
+        // Toast Notification
+        function showToast(type, message) {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Balloons Animation
+        function launchBalloons() {
+            const colors = ['#fc8181', '#63b3ed', '#68d391', '#f6e05e', '#b794f4', '#f687b3'];
+            for (let i = 0; i < 15; i++) {
+                setTimeout(() => {
+                    const balloon = document.createElement('div');
+                    balloon.className = 'balloon';
+                    balloon.style.left = Math.random() * 100 + '%';
+                    balloon.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    balloon.style.animationDuration = (2.5 + Math.random() * 1.5) + 's';
+                    balloons.appendChild(balloon);
+                    
+                    setTimeout(() => balloon.remove(), 4000);
+                }, i * 150);
+            }
+        }
+
+        // Utilities
+        function simulateDelay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
