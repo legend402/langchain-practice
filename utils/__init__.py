@@ -50,3 +50,11 @@ async def read_pdf(pdf_doc):
     for page in pdf_reader.pages:
       text += page.extract_text()
   return text
+
+def str_to_number(num_str):
+    try:
+        if "." in num_str:
+            return float(num_str)  # 转换为浮点数
+        return int(num_str)       # 转换为整数
+    except ValueError:
+        return None  # 无法转换
