@@ -8,3 +8,4 @@ class WorkflowState(TypedDict):
   search_content: str
   summary_content: str
   knowledge_points: list[str]
+  knowledges: list[str]

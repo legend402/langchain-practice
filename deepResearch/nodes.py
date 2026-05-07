@@ -107,3 +107,67 @@ def create_summary_node(state: WorkflowState):
   return {
     "summary_content": content,
   }
+
+def create_knowledge_point_node(state: WorkflowState):
+  llm = init_deepseek()
+
+  class DefaultResult(BaseModel):
+    knowledge_points: list[str]
+
+  sys_prompt = (
+    "你是一名专业的知识标签提取人员，在给予的内容片段中，提取和内容相关的知识标签"
+    "比如: 'python中使用def关键字来定义函数'，其中的标签就有['python', 'def函数']"
+    "不要提取重复的标签和没有记录意义的标签"
+  )
+
+  agent = create_agent(
+    model=llm,
+    system_prompt=sys_prompt,
+    response_format=DefaultResult
+  )
+
+  response = agent.invoke({
+    "messages": [HumanMessage(content=state["summary_content"])]
+  })
+
+  structure_res = response["structured_response"]
+  print("===================create_knowledge_point_node=======================")
+  print(structure_res)
+
+  return {
+    "knowledge_points": structure_res.knowledge_points
+  }
+
+
+def create_knowledges_node(state: WorkflowState):
+  llm = init_deepseek()
+
+  class DefaultResult(BaseModel):
+    knowledges: list[str]
+
+  sys_prompt = (
+    "你是一名专业的知识点提取人员，在给予的内容片段中，提取和内容相关的知识点"
+    "比如: 在一篇介绍python基础用法的教程中的知识点就包括: ['python中使用def关键字来定义函数']"
+    "不要提取重复的知识点和没有记录意义的知识点"
+  )
+
+  agent = create_agent(
+    model=llm,
+    system_prompt=sys_prompt,
+    response_format=DefaultResult
+  )
+
+  response = agent.invoke({
+    "messages": [HumanMessage(content=state["summary_content"])]
+  })
+
+  structure_res = response["structured_response"]
+  print("===================create_knowledges_node=======================")
+  print(structure_res)
+
+  return {
+    "knowledges": structure_res.knowledges
+  }
+
+def final_node(state: WorkflowState):
+  return state
