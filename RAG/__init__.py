@@ -19,9 +19,17 @@ def get_chunks(text):
 
 def vector_store(text_chunks):
   embedding = init_embedding_model()
-  vector_store = FAISS.from_texts(text_chunks, embedding)
-  print(f'=========向量数据库创建成功===========')
-  vector_store.save_local("faiss_db")
+  # embedding-3 的单条请求最多支持 3072 个Tokens，且数组最大不得超过 64 条
+  batch_size = 64
+  store = FAISS
+
+  for i in range(0, len(text_chunks), batch_size):
+    chunk = text_chunks[i:i+batch_size]
+    if i == 0:
+      store = FAISS.from_texts(chunk, embedding)
+    else:
+      store.add_texts(chunk)
+  store.save_local("faiss_db")
 
 def check_database_exists():
   """检查数据库是否存在"""

@@ -549,7 +549,7 @@
                 <h2 class="sidebar-title">📁 文档管理</h2>
 
                 <!-- Status -->
-                <div id="dbStatus" class="status-box status-waiting">
+                <div id="check_db" class="status-box status-waiting">
                     <span>📝</span>
                     <span>状态：等待上传PDF</span>
                 </div>
@@ -663,10 +663,13 @@
         const questionInput = document.getElementById('questionInput');
         const clearBtn = document.getElementById('clearBtn');
         const chatArea = document.getElementById('chatArea');
-        const dbStatus = document.getElementById('dbStatus');
+        const dbStatus = document.getElementById('check_db');
         const mainStatus = document.getElementById('mainStatus');
         const toastContainer = document.getElementById('toastContainer');
         const balloons = document.getElementById('balloons');
+
+
+        check_db_exists()
 
         // File Upload Handlers
         uploadArea.addEventListener('click', () => fileInput.click());
@@ -703,6 +706,13 @@
             uploadedFiles.splice(index, 1);
             renderFileList();
             updateProcessButton();
+        }
+
+        async function check_db_exists() {
+            const result = await fetch('http://127.0.0.1:4030/checkDb');
+            json = await result.json();
+            dbExists = json.code === 200
+            updateUIState()
         }
 
         function renderFileList() {
@@ -824,24 +834,73 @@
             `;
             chatArea.scrollTop = chatArea.scrollHeight;
 
-            // Simulate AI response
-            await simulateDelay(2000 + Math.random() * 2000);
-
             // Remove thinking and add response
             const thinkingEl = document.getElementById(thinkingId);
-            if (thinkingEl) {
-                thinkingEl.innerHTML = `
-                    <div class="message-label">🤖 AI</div>
-                    <div>根据文档内容分析，该文档主要涉及以下几个方面：
-1. 系统架构设计与实现方案
-2. 核心技术选型与集成方式
-3. 知识库构建与向量检索流程
-4. 问答交互与上下文管理机制
-
-如需了解更具体的细节，请告诉我您关注的重点方向。</div>
-                `;
-            }
+            let isStart = false;
+            query_answer(question, (chunk) => {
+                if (!isStart) {
+                    thinkingEl.innerHTML = '';
+                    isStart = true;
+                }
+                if (thinkingEl) {
+                    thinkingEl.innerHTML += chunk;
+                }
+            })
             chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        async function query_answer(question, chunkHandler) {
+            const response = await fetch(`http://127.0.0.1:4030/chat`,{
+                method: "POST",
+                body: JSON.stringify({ question }),
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            })
+            // 获取 reader
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) {
+                    console.log('流式传输完成');
+                    break;
+                }
+
+                // 解码数据块
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+                
+                // 处理 SSE 格式的数据（格式：data: {...}\n\n）
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // 保留未完成的行
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6); // 去掉 "data: " 前缀
+                        
+                        if (data === '[DONE]') {
+                            console.log('流式结束');
+                            return;
+                        }
+                        
+                        try {
+                            const parsed = JSON.parse(data);
+                            chunkHandler && chunkHandler(parsed.token)
+                            // 处理解析后的数据
+                            // updateUI(parsed);
+                        } catch (e) {
+                            console.log(e);
+                            
+                            // 如果不是 JSON，直接处理文本
+                            // updateUIWithText(data);
+                        }
+                    }
+                }
+            }
         }
 
         function addMessage(sender, text) {
