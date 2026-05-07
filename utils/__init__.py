@@ -6,10 +6,17 @@ from langgraph.graph.state import CompiledStateGraph
 from utils.tool_auth_util import *
 
 class SettingConfig:
-  def __init__(self, deepseek_api_key: str, amap_api_key: str, embeddings_api_key: str):
+  def __init__(
+    self, 
+    deepseek_api_key: str, 
+    amap_api_key: str, 
+    embeddings_api_key: str,
+    pgsql_db_uri: str
+  ):
     self.deepseek_api_key = deepseek_api_key
     self.amap_api_key = amap_api_key
     self.embeddings_api_key = embeddings_api_key
+    self.pgsql_db_uri = pgsql_db_uri
 
 
 def get_setting_config(): 
@@ -17,10 +24,12 @@ def get_setting_config():
   deepseek_api_key = os.getenv('DEEPSEEK_API_KEY')
   amap_api_key = os.getenv('AMAP_API_KEY')
   embeddings_api_key = os.getenv('EMBEDDINGS_API_KEY')
+  pgsql_db_uri = os.getenv('PGSQL_DB_URI')
   return SettingConfig(
     deepseek_api_key,
     amap_api_key,
-    embeddings_api_key
+    embeddings_api_key,
+    pgsql_db_uri,
   )
 
 def start_chat(agent: CompiledStateGraph):

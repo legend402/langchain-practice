@@ -1,14 +1,16 @@
 
-from typing import Annotated, Optional, TypedDict
-from langchain.messages import SystemMessage
+from typing import Annotated, Callable, Optional, TypedDict
+from langchain.messages import HumanMessage, SystemMessage
+from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.func import START, END
 from langgraph.graph import StateGraph, add_messages
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel
 
 from models.deepseek import init_deepseek
 from tools.get_weather import get_weather_tool
-from utils import str_to_number
+from utils import get_setting_config, str_to_number
 
 def basic_graph_calc():
   # 定义结构化状态
@@ -124,3 +126,49 @@ def basic_graph_chat():
 
   response = graph.invoke({ "messages": ["查询一下杭州的天气"] })
   print(response["messages"])
+
+def basic_graph_short_memory():
+  class MessageState(TypedDict):
+    messages: Annotated[list, add_messages]
+
+  model = init_deepseek()
+
+  db_uri = get_setting_config().pgsql_db_uri
+
+  with PostgresSaver.from_conn_string(db_uri) as checkpointer:
+    # 第一次调用必须要setup()初始化
+    checkpointer.setup()
+
+    def call_model(state: MessageState):
+      response = model.invoke([SystemMessage("你是一名智能问答助手，回答问题要简介，明了")] + state["messages"])
+      return { "messages": response }
+    
+    builder = StateGraph(MessageState)
+    builder.add_node(call_model)
+    builder.add_edge(START, "call_model")
+
+    graph = builder.compile(checkpointer=checkpointer)
+    config = {
+      "configurable": {
+        "thread_id": "1"
+      }
+    }
+
+    def create_stream_chat(agent: CompiledStateGraph[MessageState, None, MessageState, MessageState], message: str, cb: Callable[[str], None]):
+      print(f"{message}\n")
+      response = agent.stream({
+        "messages": [
+          HumanMessage(content=message)
+        ],
+      }, config, stream_mode="messages")
+
+      for chunk, metadata in response:
+        if hasattr(chunk, "content") and chunk.content:
+          cb(chunk.content)
+
+    def custom_print(chunk: str):
+      print(chunk, end="", flush=True)
+
+    create_stream_chat(graph, "你好，我是一名AI应用开发", custom_print)
+
+    create_stream_chat(graph, "帮我写一个langGraph的基础应用demo代码", custom_print)
