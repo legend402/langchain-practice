@@ -27,12 +27,14 @@ def create_knowledge_agent():
   })
 
   graph = builder.compile()
+  return graph
+  # response = graph.invoke({
+  #   "input": "帮我查看一下https://www.runoob.com/ai-agent/langgraph-quick-start.html这个文章讲了什么，并且查询一下langChain的最新版本API使用和文中的用法有什么不同"
+  # })
 
-  response = graph.invoke({
-    "input": "帮我查看一下https://www.runoob.com/ai-agent/langgraph-quick-start.html这个文章讲了什么，并且查询一下langChain的最新版本API使用和文中的用法有什么不同"
-  })
+  # print("===================final_output=======================")
+  # print(f"内容总结：{response["summary_content"]}")
+  # print(f"知识标签：{response["knowledges"]}")
+  # print(f"知识点：{response["knowledge_points"]}")
 
-  print("===================final_output=======================")
-  print(f"内容总结：{response["summary_content"]}")
-  print(f"知识标签：{response["knowledges"]}")
-  print(f"知识点：{response["knowledge_points"]}")
+graph = create_knowledge_agent()

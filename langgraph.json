@@ -1,0 +1,9 @@
+{
+  "dependencies": [
+    "./"
+  ],
+  "graphs": {
+    "chatbot": "./deepResearch/__init__.py:graph"
+  },
+  "env": ".env"
+}

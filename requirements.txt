@@ -17,3 +17,6 @@ faiss-cpu
 psycopg[binary,pool]
 langgraph-checkpoint-postgres
 rich
+langgraph-cli[inmem]
+pymilvus
+langchain_milvus

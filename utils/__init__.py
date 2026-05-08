@@ -10,12 +10,12 @@ class SettingConfig:
     self, 
     deepseek_api_key: str, 
     amap_api_key: str, 
-    embeddings_api_key: str,
+    glm_api_key: str,
     pgsql_db_uri: str
   ):
     self.deepseek_api_key = deepseek_api_key
     self.amap_api_key = amap_api_key
-    self.embeddings_api_key = embeddings_api_key
+    self.glm_api_key = glm_api_key
     self.pgsql_db_uri = pgsql_db_uri
 
 
@@ -23,12 +23,12 @@ def get_setting_config():
   """获取env设置配置"""
   deepseek_api_key = os.getenv('DEEPSEEK_API_KEY')
   amap_api_key = os.getenv('AMAP_API_KEY')
-  embeddings_api_key = os.getenv('EMBEDDINGS_API_KEY')
+  glm_api_key = os.getenv('GLM_API_KEY')
   pgsql_db_uri = os.getenv('PGSQL_DB_URI')
   return SettingConfig(
     deepseek_api_key,
     amap_api_key,
-    embeddings_api_key,
+    glm_api_key,
     pgsql_db_uri,
   )
 
@@ -51,11 +51,21 @@ def start_chat(agent: CompiledStateGraph):
 
     print("\n")
 
-async def read_pdf(pdf_doc):
-  """读取PDF文件"""
+def read_pdf(pdf_doc):
+  """读取PDF文件，支持 UploadFile、文件路径(str/Path) 和文件对象"""
+  import pathlib
   text = ""
-  for pdf in pdf_doc:
-    pdf_reader = PdfReader(pdf.file)
+  if isinstance(pdf_doc, (str, pathlib.Path)):
+    pdf_reader = PdfReader(str(pdf_doc))
+    for page in pdf_reader.pages:
+      text += page.extract_text()
+  elif hasattr(pdf_doc, 'file'):
+    for pdf in pdf_doc:
+      pdf_reader = PdfReader(pdf.file)
+      for page in pdf_reader.pages:
+        text += page.extract_text()
+  elif hasattr(pdf_doc, 'read'):
+    pdf_reader = PdfReader(pdf_doc)
     for page in pdf_reader.pages:
       text += page.extract_text()
   return text

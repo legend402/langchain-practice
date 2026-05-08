@@ -9,7 +9,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.tools import create_retriever_tool
 from pydantic import BaseModel
 
-from RAG import check_database_exists, get_chunks, init_embedding_model, vector_store
+from RAG import FAISSProcessor, get_chunks, init_embedding_model
 from models.deepseek import init_deepseek
 from utils import read_pdf
 
@@ -43,7 +43,7 @@ def create_rag_server():
       print('=========文件内容不为空===========')
       text_chunks = get_chunks(raw_text)
       print(f'=========文本块数量：{len(text_chunks)}===========')
-      vector_store(text_chunks)
+      FAISSProcessor.vector_store(text_chunks)
 
       return {"message": "文件上传成功", "code": 200}
     except Exception as e:
@@ -54,7 +54,7 @@ def create_rag_server():
 
   @app.post('/chat')
   async def start_chat(item: ChatBody):
-    if not check_database_exists():
+    if not FAISSProcessor.check_database_exists():
       return {"message": "数据库不存在", "code": 400}
 
     embeddings = init_embedding_model()
@@ -82,7 +82,7 @@ def create_rag_server():
   @app.get("/checkDb")
   def check_db():
     return {
-      "code": 200 if check_database_exists() else 400,
+      "code": 200 if FAISSProcessor.check_database_exists() else 400,
     }
   
   return app
