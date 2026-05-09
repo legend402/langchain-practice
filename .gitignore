@@ -5,3 +5,4 @@ servers_config.json
 .playwright-mcp
 .DS_Store
 .langgraph_api
+volumes
