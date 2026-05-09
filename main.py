@@ -28,7 +28,8 @@ async def main():
 	print("-------------insert_text---------------")
 	milvus.insert_text("deepseek", pdf_text)
 	print("-------------query_search---------------")
-	milvus.query_search("deepseek", "Quick Transformers")
+	result = milvus.query_search("deepseek", "Quick Transformers")
+	print(result)
 if __name__ == "__main__":
 	asyncio.run(main())
 	# create_knowledge_agent()

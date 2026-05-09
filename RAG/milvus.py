@@ -23,7 +23,7 @@ class MilvusProcessor:
     )
 
     schemas.add_field(
-      field_name="text", datatype=DataType.VARCHAR, max_length=1000, enable_analyzer=True
+      field_name="text", datatype=DataType.VARCHAR, max_length=3000, enable_analyzer=True
     )
 
     schemas.add_field(
@@ -53,14 +53,22 @@ class MilvusProcessor:
       embedding_result.extend([{ "embedding": vector, "text": chunk[i] } for i, vector in enumerate(result)])
     self.client.insert(collection_name=collection_name, data=embedding_result)
 
+    index_params = self.client.prepare_index_params()
+    index_params.add_index(
+      field_name="embedding", index_type="IVF_FLAT", metric_type="COSINE", params={"nlist": 128}
+    )
+    self.client.create_index(
+      collection_name=collection_name,
+      index_params=index_params
+    )
+
   def query_search(self, collection_name: str, text: str):
     query_vec = self.embedding.embed_documents([text])
-
+    self.client.load_collection(collection_name=collection_name)
     result = self.client.search(
       collection_name=collection_name,
-      data=[query_vec],
+      data=query_vec,
       limit=5,
       output_fields=["text"]
     )
-
     return result
