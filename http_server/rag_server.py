@@ -36,7 +36,7 @@ def create_rag_server():
   @app.post("/uploadPdf")
   async def upload_file(file: UploadFile = File(...)):
     try:
-      raw_text = await read_pdf(file if isinstance(file, list) else [file])
+      raw_text = await read_pdf(file)
     
       if not raw_text.strip():
         return {"message": "文件内容为空", "code": 400}

@@ -11,6 +11,14 @@ class MilvusProcessor:
     self.embedding = init_embedding_model()
     self.init_databases(database=database)
 
+  def init_databases(self, database: list[str] | str):
+      if not self.check_database_exist(database):
+        self.client.create_database(db_name=database)
+  
+  def check_database_exist(self, database: str):
+    current_databases = self.client.list_databases()
+    return database in current_databases
+
   def create_collection(self, collection_name):
     if self.client.has_collection(collection_name):
       self.client.drop_collection(collection_name)
@@ -36,14 +44,6 @@ class MilvusProcessor:
       auto_id=True,
       schema=schemas,
     )
-
-  def init_databases(self, database: list[str] | str):
-      if not self.check_database_exist(database):
-        self.client.create_database(db_name=database)
-  
-  def check_database_exist(self, database: str):
-    current_databases = self.client.list_databases()
-    return database in current_databases
   
   def insert_text(self, collection_name: str, text: str):
     chunks = get_chunks(text)
@@ -63,6 +63,11 @@ class MilvusProcessor:
     )
 
   def query_search(self, collection_name: str, text: str):
+    """
+      根据查询内容从向量数据库检索相关数据
+      :param collection_name: 检索数据集名称
+      :param str: 查询内容
+    """
     query_vec = self.embedding.embed_documents([text])
     self.client.load_collection(collection_name=collection_name)
     result = self.client.search(
@@ -72,3 +77,12 @@ class MilvusProcessor:
       output_fields=["text"]
     )
     return result
+
+  def query_search_tool(self, collection_name: str):
+    def inner_tool(text: str):
+      """
+        根据查询内容从向量数据库检索相关数据
+        :param str: 查询内容
+      """
+      return self.query_search(collection_name=collection_name, text=text)
+    return inner_tool
