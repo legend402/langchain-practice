@@ -20,3 +20,5 @@ rich
 langgraph-cli[inmem]
 pymilvus
 langchain_milvus
+PyMySQL
+SQLAlchemy

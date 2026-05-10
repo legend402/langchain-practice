@@ -11,12 +11,14 @@ class SettingConfig:
     deepseek_api_key: str, 
     amap_api_key: str, 
     glm_api_key: str,
-    pgsql_db_uri: str
+    pgsql_db_uri: str,
+    mysql_db_uri: str,
   ):
     self.deepseek_api_key = deepseek_api_key
     self.amap_api_key = amap_api_key
     self.glm_api_key = glm_api_key
     self.pgsql_db_uri = pgsql_db_uri
+    self.mysql_db_uri = mysql_db_uri
 
 
 def get_setting_config(): 
@@ -25,11 +27,13 @@ def get_setting_config():
   amap_api_key = os.getenv('AMAP_API_KEY')
   glm_api_key = os.getenv('GLM_API_KEY')
   pgsql_db_uri = os.getenv('PGSQL_DB_URI')
+  mysql_db_uri = os.getenv('MYSQL_DB_URI')
   return SettingConfig(
     deepseek_api_key,
     amap_api_key,
     glm_api_key,
     pgsql_db_uri,
+    mysql_db_uri,
   )
 
 def start_chat(agent: CompiledStateGraph):
@@ -60,10 +64,9 @@ def read_pdf(pdf_doc):
     for page in pdf_reader.pages:
       text += page.extract_text()
   elif hasattr(pdf_doc, 'file'):
-    for pdf in pdf_doc:
-      pdf_reader = PdfReader(pdf.file)
-      for page in pdf_reader.pages:
-        text += page.extract_text()
+    pdf_reader = PdfReader(pdf_doc.file)
+    for page in pdf_reader.pages:
+      text += page.extract_text()
   elif hasattr(pdf_doc, 'read'):
     pdf_reader = PdfReader(pdf_doc)
     for page in pdf_reader.pages:
