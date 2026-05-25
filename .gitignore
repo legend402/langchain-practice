@@ -1,0 +1,6 @@
+.venv
+.playwright-cli
+.env
+__pycache__
+.DS_Store
+.vite
