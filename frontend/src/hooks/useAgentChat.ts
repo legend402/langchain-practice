@@ -167,7 +167,7 @@ export function useAgentChat() {
               content: isFinalize
                 ? (nodeData as { final_answer: string }).final_answer
                 : getNodeSummary(nodeKey, nodeData),
-              state: isFinalize ? { ...stateRef.current } : undefined,
+              state: { ...stateRef.current },
               nodeName: nodeKey,
               timestamp: Date.now(),
             };
@@ -236,7 +236,7 @@ export function useAgentChat() {
                 content: isFinalize
                   ? (nodeData as { final_answer: string }).final_answer
                   : getNodeSummary(nodeKey, nodeData),
-                state: isFinalize ? { ...stateRef.current } : undefined,
+                state: { ...stateRef.current },
                 nodeName: nodeKey,
                 timestamp: Date.now(),
               };
