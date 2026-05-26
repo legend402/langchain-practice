@@ -1,5 +1,4 @@
 import type {
-  AgentState,
   HumanFeedback,
   SubmitRequest,
   SSEEventData,
@@ -17,7 +16,7 @@ export interface AgentApi {
     sessionId: string,
     feedback: HumanFeedback,
     events: SSEEventHandler,
-  ) => Promise<AgentState>;
+  ) => Promise<void>;
 }
 
 const realApi: AgentApi = {
@@ -73,7 +72,7 @@ const realApi: AgentApi = {
     sessionId: string,
     feedback: HumanFeedback,
     events: SSEEventHandler,
-  ): Promise<AgentState> {
+  ): Promise<void> {
     const response = await fetch(`${API_BASE}/chat/${sessionId}/feedback`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
