@@ -19,6 +19,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from config import AgentState
 from graph import _build_graph
 from service.db.database import engine, get_session, init_db, ChatSession
+from service.result import Result
 from utils import get_initial_state
 
 load_dotenv()
@@ -37,7 +38,7 @@ class ChatFeedback(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-  pool = AsyncConnectionPool(DB_URI, min_size=2, max_size=10)
+  pool = AsyncConnectionPool(DB_URI, min_size=2, max_size=10, kwargs={"autocommit": True})
   await pool.open()
   checkpointer = AsyncPostgresSaver(pool)
   await checkpointer.setup()
@@ -63,15 +64,31 @@ def create_agent_service():
     result = await session.exec(
       select(ChatSession).order_by(ChatSession.create_at.desc())
     )
-    return result.all()
+
+    return Result.success(result.all())
+  
+  @app.get('/chat/create')
+  async def chat_sessions(session: AsyncSession = Depends(get_session)):
+    result = await session.exec(
+      select(ChatSession).order_by(ChatSession.create_at.desc())
+    )
+
+    return Result.success(result.all())
 
   @app.post("/chat/start")
-  async def chat_start(body: ChatStart):
+  async def chat_start(body: ChatStart, session: AsyncSession = Depends(get_session)):
     agent = app.state.agent
     initial_state = get_initial_state({
       "user_query": body.query
     })
     thread_id = str(uuid4())
+    await session.add(
+      ChatSession(
+        thread_id=thread_id,
+        title=body.query,
+      )
+    )
+    session.commit()
 
     return StreamingResponse(event_generator(agent, initial_state, thread_id), media_type="text/events-stream")
   
