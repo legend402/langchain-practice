@@ -115,6 +115,7 @@ class HumanFeedback(TypedDict, total=False):
 
 
 class AgentState(TypedDict, total=False):
+    messages: list[(str, str)]
     # 用户输入
     user_query: str
     task_goal: str

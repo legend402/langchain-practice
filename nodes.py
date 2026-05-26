@@ -1,5 +1,4 @@
 from typing import Callable
-from langchain.messages import ToolMessage
 from langchain_classic.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langgraph.types import interrupt
@@ -32,6 +31,7 @@ def next_redirect(state: AgentState):
 
 @node_hook()
 def supervisor_node(state: AgentState):
+  print(state["messages"])
   llm = init_deepseek_model()
   system_prompt = ChatPromptTemplate.from_messages([
     ("system", supervisor_prompt),
@@ -40,7 +40,9 @@ def supervisor_node(state: AgentState):
   supervisor_chain = system_prompt | llm | JsonOutputParser()
   result = supervisor_chain.invoke(supervisor_input(state))
   result = _validate_supervisor_result(result, state)
-  print(result)
+  
+  messages = state["messages"] + [("AI", f"[supervisor]: {result["supervisor_reason"]}")]
+  result["messages"] = messages
   return result
 
 def _validate_supervisor_result(result: dict, state: AgentState) -> dict:
@@ -84,43 +86,65 @@ def search_node(state: AgentState):
     return {
       "errors": ["search流程获取数据异常"]
     }
+    
+  search_state["messages"] = state["messages"] + [("AI", f"[search]: 搜索完成，找到 {len(search_state["search_results"])} 篇相关资料")]
   return search_state
 
 @node_hook(after_hook=next_redirect)
 def read_node(state: AgentState):
-  return create_structure_node(state, reader_prompt, reader_input)
+  result = create_structure_node(state, reader_prompt, reader_input)
+  result["messages"] = [("AI", f"[read]: 阅读完成，提取了 {len(result["read_notes"])} 条笔记")]
+  return result
 
 @node_hook(after_hook=next_redirect)
 def analyze_node(state: AgentState):
-  return create_structure_node(state, analyze_prompt, analyse_input)
+  result = create_structure_node(state, analyze_prompt, analyse_input)
+  result["messages"] = state["messages"] + [("AI", f"[analyze]: {result["analysis_summary"]}")]
+  return result
 
 @node_hook(after_hook=next_redirect)
 def tag_node(state: AgentState):
-  return create_structure_node(state, tag_prompt, tag_input)
+  result = create_structure_node(state, tag_prompt, tag_input)
+  result["messages"] = state["messages"] + [("AI", f"[tag]: 标签生成完成，提取了{len(result["tags"]["keywords"])}个关键词，提取了{len(result["tags"]["topic"])}个主题标签，提取了{len(result["tags"]["domain"])}个领域标签")]
+  return result
 
 @node_hook(after_hook=next_redirect)
 def knowledge_node(state: AgentState):
-  return create_structure_node(state, knowledge_prompt, knowledge_input)
+  result = create_structure_node(state, knowledge_prompt, knowledge_input)
+  result["messages"] = state["messages"] + [("AI", f"[knowledge]: 提取了{len(result["knowledge_summary"]["key_points"])}个知识点，总结如下：{result["knowledge_summary"]["summary"]}")]
+  return result
 
 @node_hook()
 def reviewer_node(state: AgentState):
-  return create_structure_node(state, reviewer_prompt, reviewer_input)
+  result = create_structure_node(state, reviewer_prompt, reviewer_input)
+  
+  review_result = result["review_result"]
+  review_status = review_result["status"]
+  
+  suggestions = "没有建议" if len(review_result["suggestions"]) == False else f"建议如下：{",".join(review_result["suggestions"])}"
+  issues = "没有问题" if len(review_result["issues"]) == False else f"问题如下：{",".join(review_result["issues"])}"
+  
+  result["messages"] = state["messages"] + [("AI", f"[review]: 审核结果为{review_status},{suggestions},{issues}")]
+  return result
 
 @node_hook()
 def human_gate_node(state: AgentState):
   result = create_structure_node(state, human_gate_prompt, human_gate_input)
+  result["messages"] = state["messages"] + [("AI", f"[human]: {result["human_message"]}")]
   print("==================human_gate_node====================")
   feedback = interrupt({
     "human_message": result.get("human_message", ""),
     "expected_reply_schema": result.get("expected_reply_schema", {})
   })
   result["human_feedback"] = feedback
+  result["messages"].append(("human", f"[human]: 用户反馈结果：{feedback["decision"]}，给出如下建议: {feedback["comment"]}"))
   return result
 
 @node_hook()
 def finalize_node(state: AgentState):
-  return create_structure_node(state, finalize_prompt, finalize_input)
-
+  result = create_structure_node(state, finalize_prompt, finalize_input)
+  result["messages"] = state["messages"] + [("AI", f"[finalize]: {result["final_answer"]}")]
+  return result
 
 def route_supervisor_node(state: AgentState):
   """总体路由"""

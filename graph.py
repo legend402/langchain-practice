@@ -1,12 +1,12 @@
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.func import END, START
 from langgraph.graph import StateGraph
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from config import AgentState
 from nodes import analyze_node, finalize_node, human_gate_node, knowledge_node, read_node, reviewer_node, route_human_gate_node, route_review_node, route_supervisor_node, search_node, supervisor_node, tag_node
 
 
-def build_graph_agent():
+def _build_graph(checkpointer: AsyncPostgresSaver):
   builder = StateGraph(AgentState)
   builder.add_node("supervisor", supervisor_node)
   builder.add_node("search", search_node)
@@ -48,9 +48,5 @@ def build_graph_agent():
     "revise": "supervisor",
     "extra_input": "supervisor"
   })
-  
-  # 添加持久化能力，目前是为了配合human_gate使用
-  checkpointer = MemorySaver()
-  graph = builder.compile(checkpointer=checkpointer) # human_gate 执行完后暂停
 
-  return graph
+  return builder.compile(checkpointer=checkpointer)

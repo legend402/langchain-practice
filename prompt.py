@@ -7,8 +7,8 @@ supervisor_prompt = """
 你的职责是根据当前流程摘要决定下一步进入哪个节点。
 你不能直接完成知识总结，也不能输出最终答案。
 
-最近人工反馈：
-{human_feedback}
+历史消息：
+{messages}
 
 用户问题：
 {user_query}
@@ -39,6 +39,9 @@ supervisor_prompt = """
 
 最近审核结果：
 {review_result}
+
+最近人工反馈：
+{human_feedback}
 
 迭代次数：
 {iteration_count} / {max_iterations}
@@ -105,6 +108,7 @@ supervisor_prompt = """
 
 def supervisor_input(state: AgentState) -> dict:
   return {
+    "messages": state.get("messages", []),
     "user_query": state.get("user_query"),
     "task_goal": state.get("task_goal"),
     "constraints": state.get("constraints", []),

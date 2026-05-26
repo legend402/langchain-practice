@@ -2,6 +2,7 @@ import json, re
 import time
 from typing import Callable, Optional
 
+from langchain.messages import HumanMessage
 from pydantic import BaseModel
 
 from config import AgentState
@@ -116,5 +117,5 @@ def get_initial_state(state: AgentState):
     "trace": [],
   }
   new_state = merge_state(initial_state, state)
-  print(new_state)
+  new_state["messages"] = [("human", state["user_query"])]
   return new_state

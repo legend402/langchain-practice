@@ -4,8 +4,14 @@ langchain-core
 langchain-openai
 langchain-tavily
 langgraph
+langgraph-checkpoint-postgres
+psycopg[binary]
+psycopg-pool
 fastapi
 pydantic
 python-dotenv
 rich
 uvicorn[standard]
+sqlmodel
+alembic
+asyncpg

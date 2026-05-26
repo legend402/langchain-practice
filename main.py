@@ -1,8 +1,11 @@
 import asyncio
 from dotenv import load_dotenv
+from psycopg_pool import AsyncConnectionPool
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+import os
 
 from config import AgentState
-from graph import build_graph_agent
+from graph import _build_graph
 from nodes import supervisor_node
 from utils.rich_print import enable_rich_print
 
@@ -45,9 +48,17 @@ async def main():
     "errors": [],
     "trace": [],
   }
-  agent = build_graph_agent()
+
+  pool = AsyncConnectionPool(os.getenv("PGSQL_DB_URI"), min_size=1, max_size=3)
+  await pool.open()
+  checkpointer = AsyncPostgresSaver(pool)
+  await checkpointer.setup()
+  agent = _build_graph(checkpointer)
+
   async for event in agent.astream(initial_state, stream_mode=["updates", "custom"]):
     print(event)
+
+  await pool.close()
 
 if __name__ == "__main__":
   asyncio.run(main())

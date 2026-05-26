@@ -1,5 +1,4 @@
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import MarkdownRenderer from "./MarkdownRenderer";
 import type { AgentState } from "../types/agent";
 import { BookOpen } from "lucide-react";
 
@@ -18,9 +17,7 @@ export default function ResultCard({ state }: ResultCardProps) {
         </div>
         <h3 className="text-sm font-semibold text-ink-100">最终结果</h3>
       </div>
-      <div className="prose prose-sm max-w-none text-ink-100 mb-4">
-        <Markdown remarkPlugins={[remarkGfm]}>{state.final_answer}</Markdown>
-      </div>
+      <MarkdownRenderer className="mb-4">{state.final_answer}</MarkdownRenderer>
       {knowledgeTags && (
         <div className="flex flex-wrap gap-1.5 mb-3">
           {knowledgeTags.domain.map((t) => (

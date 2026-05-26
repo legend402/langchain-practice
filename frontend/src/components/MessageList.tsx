@@ -1,7 +1,6 @@
 import { useRef, useEffect } from "react";
 import type { ChatMessage } from "../types/agent";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import MarkdownRenderer from "./MarkdownRenderer";
 import ResultCard from "./ResultCard";
 import { Bot, User } from "lucide-react";
 
@@ -52,11 +51,7 @@ export default function MessageList({ messages, loading }: MessageListProps) {
               <ResultCard state={msg.state} />
             ) : (
               <div className="glass-card px-4 py-3">
-                <div className="prose prose-sm max-w-none break-words text-ink-100">
-                  <Markdown remarkPlugins={[remarkGfm]}>
-                    {msg.content}
-                  </Markdown>
-                </div>
+                <MarkdownRenderer>{msg.content}</MarkdownRenderer>
                 {msg.nodeName && (
                   <span className="text-[11px] text-ink-400 mt-2 block">
                     节点: {msg.nodeName}

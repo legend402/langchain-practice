@@ -1,6 +1,8 @@
 .venv
 .playwright-cli
+.playwright-mcp
 .env
 __pycache__
 .DS_Store
 .vite
+.langgraph_api
