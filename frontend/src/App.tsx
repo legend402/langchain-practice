@@ -1,5 +1,5 @@
 import { useAgentChat } from "./hooks/useAgentChat";
-import Header from "./components/Header";
+
 import SearchForm from "./components/SearchForm";
 import MessageList from "./components/MessageList";
 import FeedbackPanel from "./components/FeedbackPanel";
@@ -9,7 +9,7 @@ export default function App() {
   const chat = useAgentChat();
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen bg-background flex">
       <SessionSidebar
         sessions={chat.sessions}
         activeThreadId={chat.activeThreadId}
@@ -20,18 +20,19 @@ export default function App() {
         onToggle={chat.toggleSidebar}
       />
 
-      <div className={`flex-1 flex flex-col min-w-0 main-area ${chat.sidebarCollapsed ? "sidebar-collapsed" : "sidebar-expanded"}`}>
-        <Header />
-        <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 pb-4">
-          <SearchForm onSubmit={chat.submit} loading={chat.loading} />
+      <div className={`flex-1 flex flex-col min-w-0 h-screen main-area ${chat.sidebarCollapsed ? "sidebar-collapsed" : "sidebar-expanded"}`}>
+        <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 overflow-hidden" style={{ height: "calc(100vh)" }}>
           <MessageList messages={chat.messages} loading={chat.loading} />
-          {chat.showFeedbackPanel && chat.currentState && (
-            <FeedbackPanel
-              state={chat.currentState}
-              onSubmit={chat.submitFeedback}
-              disabled={chat.loading}
-            />
-          )}
+          <div className="flex-shrink-0 pb-4 pt-2 space-y-3">
+            {chat.showFeedbackPanel && chat.currentState && (
+              <FeedbackPanel
+                state={chat.currentState}
+                onSubmit={chat.submitFeedback}
+                disabled={chat.loading}
+              />
+            )}
+            <SearchForm onSubmit={chat.submit} loading={chat.loading} />
+          </div>
         </main>
       </div>
     </div>

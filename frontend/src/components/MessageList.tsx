@@ -14,6 +14,7 @@ import {
   Lightbulb,
   ClipboardCheck,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 
 interface MessageListProps {
@@ -97,10 +98,20 @@ export default function MessageList({ messages, loading }: MessageListProps) {
   }, [messages]);
 
   return (
-    <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 pb-4">
+    <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 py-4 scrollbar-hide">
       {messages.length === 0 && !loading && (
-        <div className="flex-1 flex items-center justify-center py-20">
-          <p className="text-ink-400 text-sm">输入知识点问题开始对话</p>
+        <div className="h-full flex flex-col items-center justify-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-white" />
+            </div>
+            <h1 className="text-xl font-semibold text-ink-100 tracking-tight">
+              知识点总结 Agent
+            </h1>
+          </div>
+          <p className="text-sm text-ink-400">
+            输入知识点问题，AI 自动搜索、分析、总结
+          </p>
         </div>
       )}
       {messages.map((msg) => (

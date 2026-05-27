@@ -40,7 +40,7 @@ export default function FeedbackPanel({
     "请审阅当前总结，选择下一步操作。";
 
   return (
-    <div className="glass-card p-4 mb-4 border-l-4 border-l-warning">
+    <div className="glass-card p-4 border-l-4 border-l-warning">
       <p className="text-sm text-ink-100 mb-3">{humanMessage}</p>
       {state.review_result && state.review_result.issues.length > 0 && (
         <div className="text-xs text-ink-400 mb-3">
