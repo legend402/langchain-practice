@@ -40,6 +40,14 @@
   background: #a0a0b4;
 }
 
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
@@ -355,6 +363,7 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-right: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 3px 0 10px rgba(0, 0, 0, 0.03);
   display: flex;
   flex-direction: column;
   z-index: 40;
@@ -425,6 +434,12 @@
 
 .main-area.sidebar-expanded {
   margin-left: 280px;
+}
+
+@media (max-width: 768px) {
+  .main-area.sidebar-expanded {
+    margin-left: 0;
+  }
 }
 
 .main-area.sidebar-collapsed {

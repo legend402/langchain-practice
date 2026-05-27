@@ -30,9 +30,15 @@ export default function SessionSidebar({
 }: SessionSidebarProps) {
   return (
     <>
+      {!collapsed && (
+        <div
+          className="fixed inset-0 bg-black/20 z-30 md:hidden"
+          onClick={onToggle}
+        />
+      )}
       <aside className={`sidebar-panel ${collapsed ? "sidebar-collapsed" : ""}`}>
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <span className="text-xs font-semibold text-ink-400 uppercase tracking-wider sidebar-label">
+          <span className="text-sm font-semibold text-ink-100 uppercase tracking-wider sidebar-label">
             历史会话
           </span>
           <div className="flex items-center gap-1">
@@ -41,14 +47,14 @@ export default function SessionSidebar({
               className="w-7 h-7 rounded-lg flex items-center justify-center text-ink-400 hover:text-accent hover:bg-accent-bg transition-all cursor-pointer"
               title="新建会话"
             >
-              <MessageSquarePlus className="w-4 h-4" />
+              <MessageSquarePlus className="w-[18px] h-[18px]" />
             </button>
             <button
               onClick={onToggle}
               className="w-7 h-7 rounded-lg flex items-center justify-center text-ink-400 hover:text-ink-100 hover:bg-white/40 transition-all cursor-pointer"
               title="收起侧栏"
             >
-              <PanelLeftClose className="w-4 h-4" />
+              <PanelLeftClose className="w-[18px] h-[18px]" />
             </button>
           </div>
         </div>
