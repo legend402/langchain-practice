@@ -10,7 +10,7 @@ def init_deepseek_model():
     streaming = True,
     extra_body = {
       "thinking": {"type": "disabled"},
-      "max_tokens": 50000,
+      "max_tokens": 100000,
     }
   )
   return llm

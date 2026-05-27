@@ -31,7 +31,6 @@ def next_redirect(state: AgentState):
 
 @node_hook()
 def supervisor_node(state: AgentState):
-  print(state["messages"])
   llm = init_deepseek_model()
   system_prompt = ChatPromptTemplate.from_messages([
     ("system", supervisor_prompt),
