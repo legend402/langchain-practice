@@ -41,7 +41,7 @@ class ChatFeedback(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-  pool = AsyncConnectionPool(DB_URI, min_size=2, max_size=10, kwargs={"autocommit": True})
+  pool = AsyncConnectionPool(DB_URI, min_size=2, max_size=10, kwargs={"autocommit": True}, open=False)
   await pool.open()
   checkpointer = AsyncPostgresSaver(pool)
   await checkpointer.setup()
