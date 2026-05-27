@@ -343,3 +343,138 @@
 .md-code-copy.copied {
   color: var(--color-success);
 }
+
+/* ── Session Sidebar ── */
+.sidebar-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;
+  height: 100vh;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid rgba(255, 255, 255, 0.7);
+  display: flex;
+  flex-direction: column;
+  z-index: 40;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.sidebar-panel.sidebar-collapsed {
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar-label,
+.sidebar-content {
+  transition: opacity 0.2s ease 0.1s;
+}
+
+.sidebar-collapsed .sidebar-label,
+.sidebar-collapsed .sidebar-content {
+  opacity: 0;
+  transition-delay: 0s;
+}
+
+.sidebar-toggle-btn {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 50;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8888a0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  animation: sidebar-fade-in 0.3s ease 0.15s both;
+}
+
+.sidebar-toggle-btn:hover {
+  color: #2e2e42;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes sidebar-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.main-area {
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.main-area.sidebar-expanded {
+  margin-left: 280px;
+}
+
+.main-area.sidebar-collapsed {
+  margin-left: 0;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.sidebar-item.active {
+  background: rgba(108, 92, 231, 0.08);
+}
+
+.sidebar-item.active p:first-child {
+  color: #6c5ce7;
+  font-weight: 500;
+}
+
+.sidebar-delete {
+  opacity: 0;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8888a0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sidebar-item:hover .sidebar-delete {
+  opacity: 1;
+}
+
+.sidebar-delete:hover {
+  background: rgba(255, 80, 80, 0.08);
+  color: #e74c3c;
+}

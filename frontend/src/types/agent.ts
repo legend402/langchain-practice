@@ -126,13 +126,29 @@ export interface SubmitRequest {
   query: string;
 }
 
+export interface ChatSession {
+  thread_id: string;
+  title: string | null;
+  create_at: string;
+}
+
 export interface ChatMessage {
   id: string;
-  role: "user" | "agent";
+  role: "human" | "AI";
   content: string;
   state?: AgentState;
   nodeName?: string;
   timestamp: number;
+}
+
+export interface ChatMessageFromDB {
+  id: number;
+  thread_id: string;
+  role: string;
+  node_name: string | null;
+  content: string | null;
+  state: Record<string, unknown> | null;
+  create_at: string;
 }
 
 export type SSEEventData = {

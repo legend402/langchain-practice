@@ -1,14 +1,13 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import type {
   AgentState,
   ChatMessage,
+  ChatSession,
   HumanFeedback,
   SSEEventData,
   NodeKey,
 } from "../types/agent";
-import {
-  agentApi,
-} from "../api/agentApi";
+import { agentApi } from "../api/agentApi";
 import { getNodeKey, createInitialState } from "../types/agent";
 
 function uuid(): string {
@@ -127,17 +126,64 @@ export function useAgentChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentState, setCurrentState] = useState<AgentState | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const stateRef = useRef<AgentState>(createInitialState());
 
   const addMessage = useCallback((msg: ChatMessage) => {
     setMessages((prev) => [...prev, msg]);
   }, []);
 
+  const refreshSessions = useCallback(async () => {
+    try {
+      const list = await agentApi.getSessions();
+      setSessions(list);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    refreshSessions();
+  }, [refreshSessions]);
+
+  const loadSession = useCallback(async (threadId: string) => {
+    try {
+      const msgs = await agentApi.getMessages(threadId);
+      setMessages(msgs);
+      setActiveThreadId(threadId);
+      stateRef.current = createInitialState();
+
+      const finalizeMsg = msgs.filter((m) => m.nodeName === "finalize");
+      if (finalizeMsg.length > 0 && finalizeMsg[finalizeMsg.length - 1].state) {
+        setCurrentState(finalizeMsg[finalizeMsg.length - 1].state!);
+      } else {
+        setCurrentState(null);
+      }
+    } catch {}
+  }, []);
+
+  const startNewSession = useCallback(() => {
+    setMessages([]);
+    setCurrentState(null);
+    setActiveThreadId(null);
+    stateRef.current = createInitialState();
+  }, []);
+
+  const deleteSession = useCallback(async (threadId: string) => {
+    try {
+      await agentApi.deleteSession(threadId);
+      setSessions((prev) => prev.filter((s) => s.thread_id !== threadId));
+      if (activeThreadId === threadId) {
+        startNewSession();
+      }
+    } catch {}
+  }, [activeThreadId, startNewSession]);
+
   const submit = useCallback(
     async (query: string) => {
       const userMsg: ChatMessage = {
         id: uuid(),
-        role: "user",
+        role: "human",
         content: query,
         timestamp: Date.now(),
       };
@@ -145,6 +191,7 @@ export function useAgentChat() {
       setLoading(true);
 
       stateRef.current = createInitialState();
+      setActiveThreadId(null);
 
       try {
         await agentApi.submitSSETask({ query }, {
@@ -163,7 +210,7 @@ export function useAgentChat() {
             const isFinalize = nodeKey === "finalize";
             const agentMsg: ChatMessage = {
               id: uuid(),
-              role: "agent",
+              role: "AI",
               content: isFinalize
                 ? (nodeData as { final_answer: string }).final_answer
                 : getNodeSummary(nodeKey, nodeData),
@@ -172,11 +219,16 @@ export function useAgentChat() {
               timestamp: Date.now(),
             };
             addMessage(agentMsg);
+
+            if (event.session_id) {
+              setActiveThreadId(event.session_id);
+              refreshSessions();
+            }
           },
           onError: (err: Error) => {
             const errMsg: ChatMessage = {
               id: uuid(),
-              role: "agent",
+              role: "AI",
               content: `处理出错: ${err.message}`,
               timestamp: Date.now(),
             };
@@ -187,7 +239,7 @@ export function useAgentChat() {
       } catch (err) {
         const errMsg: ChatMessage = {
           id: uuid(),
-          role: "agent",
+            role: "AI",
           content: `请求失败: ${err instanceof Error ? err.message : "未知错误"}`,
           timestamp: Date.now(),
         };
@@ -196,7 +248,7 @@ export function useAgentChat() {
         setLoading(false);
       }
     },
-    [addMessage],
+    [addMessage, refreshSessions],
   );
 
   const submitFeedback = useCallback(
@@ -206,7 +258,7 @@ export function useAgentChat() {
 
       const feedbackMsg: ChatMessage = {
         id: uuid(),
-        role: "user",
+        role: "human",
         content: `[${feedback.decision}] ${feedback.comment}`,
         timestamp: Date.now(),
       };
@@ -232,7 +284,7 @@ export function useAgentChat() {
               const isFinalize = nodeKey === "finalize";
               const agentMsg: ChatMessage = {
                 id: uuid(),
-                role: "agent",
+                role: "AI",
                 content: isFinalize
                   ? (nodeData as { final_answer: string }).final_answer
                   : getNodeSummary(nodeKey, nodeData),
@@ -245,7 +297,7 @@ export function useAgentChat() {
             onError: (err: Error) => {
               const errMsg: ChatMessage = {
                 id: uuid(),
-                role: "agent",
+                role: "AI",
                 content: `处理出错: ${err.message}`,
                 timestamp: Date.now(),
               };
@@ -257,7 +309,7 @@ export function useAgentChat() {
       } catch (err) {
         const errMsg: ChatMessage = {
           id: uuid(),
-          role: "agent",
+            role: "AI",
           content: `反馈提交失败: ${err instanceof Error ? err.message : "未知错误"}`,
           timestamp: Date.now(),
         };
@@ -283,5 +335,12 @@ export function useAgentChat() {
     submitFeedback,
     showFeedbackPanel,
     showResultCard,
+    sessions,
+    activeThreadId,
+    sidebarCollapsed,
+    loadSession,
+    startNewSession,
+    deleteSession,
+    toggleSidebar: () => setSidebarCollapsed((v) => !v),
   };
 }

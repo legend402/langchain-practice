@@ -91,7 +91,7 @@ export default function MessageList({ messages, loading }: MessageListProps) {
   useEffect(() => {
     if (messages.length === 0) return;
     const last = messages[messages.length - 1];
-    if (last.role === "agent" && last.nodeName && last.nodeName !== "finalize" && last.state) {
+    if (last.role === "AI" && last.nodeName && last.nodeName !== "finalize" && last.state) {
       setExpandedId(last.id);
     }
   }, [messages]);
@@ -106,21 +106,21 @@ export default function MessageList({ messages, loading }: MessageListProps) {
       {messages.map((msg) => (
         <div
           key={msg.id}
-          className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
+          className={`flex gap-3 ${msg.role === "human" ? "justify-end" : ""}`}
         >
-          {msg.role === "agent" && (
+          {msg.role === "AI" && (
             <div className="flex-shrink-0 w-7 h-7 rounded-full bg-accent flex items-center justify-center mt-0.5">
               <Bot className="w-4 h-4 text-white" />
             </div>
           )}
           <div
             className={`max-w-[80%] min-w-0 ${
-              msg.role === "user"
+              msg.role === "human"
                 ? "glass-card px-4 py-2.5"
                 : "w-full"
             }`}
           >
-            {msg.role === "user" ? (
+            {msg.role === "human" ? (
               <p className="text-sm text-ink-100 whitespace-pre-wrap break-words">
                 {msg.content}
               </p>
@@ -143,7 +143,7 @@ export default function MessageList({ messages, loading }: MessageListProps) {
               </div>
             )}
           </div>
-          {msg.role === "user" && (
+          {msg.role === "human" && (
             <div className="flex-shrink-0 w-7 h-7 rounded-full bg-ink-100 flex items-center justify-center mt-0.5">
               <User className="w-4 h-4 text-white" />
             </div>
