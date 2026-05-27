@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { AgentState } from "../types/agent";
 
 interface StateCardProps {
@@ -25,7 +24,6 @@ const CREDIBILITY_LABEL: Record<string, string> = {
 };
 
 export default function StateCard({ state, nodeName }: StateCardProps) {
-  const [expanded, setExpanded] = useState(true);
 
   function renderContent() {
     switch (nodeName) {
@@ -294,19 +292,11 @@ export default function StateCard({ state, nodeName }: StateCardProps) {
   }
 
   return (
-    <div className="rounded-xl bg-white/30 border border-white/60">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-white/30 rounded-xl transition-colors"
-      >
-        <span className="text-xs font-medium text-ink-100">
-          {NODE_LABELS[nodeName] || nodeName} - 详细信息
-        </span>
-        <span className="text-[11px] text-ink-400">
-          {expanded ? "收起" : "展开"}
-        </span>
-      </button>
-      {expanded && <div className="px-3 pb-2">{renderContent()}</div>}
+    <div className="rounded-xl bg-white/30 border border-white/60 px-1 py-0">
+      <span className="text-xs font-medium text-ink-100">
+        {NODE_LABELS[nodeName] || nodeName} - 详细信息
+      </span>
+      <div className="mt-1">{renderContent()}</div>
     </div>
   );
 }

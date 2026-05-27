@@ -128,7 +128,7 @@ export function useAgentChat() {
   const [loading, setLoading] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 768);
   const stateRef = useRef<AgentState>(createInitialState());
 
   const addMessage = useCallback((msg: ChatMessage) => {
@@ -147,6 +147,7 @@ export function useAgentChat() {
   }, [refreshSessions]);
 
   const loadSession = useCallback(async (threadId: string) => {
+    if (threadId === activeThreadId) return;
     try {
       const msgs = await agentApi.getMessages(threadId);
       setMessages(msgs);
@@ -160,7 +161,7 @@ export function useAgentChat() {
         setCurrentState(null);
       }
     } catch {}
-  }, []);
+  }, [activeThreadId]);
 
   const startNewSession = useCallback(() => {
     setMessages([]);
