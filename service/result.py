@@ -12,7 +12,7 @@ class ResultOptions(BaseModel):
 
 class Result:
   @staticmethod
-  def success(result: Any, message: str = "操作成功"):
+  def success(result: Optional[Any] = None, message: str = "操作成功"):
     return ResultOptions(code=200, success=True, result=result, message=message)
   
   @staticmethod

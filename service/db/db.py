@@ -1,19 +1,23 @@
 from datetime import datetime
+from enum import Enum
 from typing import Optional
-from sqlalchemy import Column
+from sqlalchemy import Column, ForeignKey, Integer, Identity
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
-
 
 class ChatSession(SQLModel, table=True):
   thread_id: str = Field(primary_key=True)
   title: Optional[str] = None
   create_at: datetime = Field(default_factory=datetime.now)
-  
+
+class Roles(Enum):
+  HUMAN = "human"
+  AI = "AI"
+
 class ChatMessage(SQLModel, table=True):
-  id: int = Field(primary_key=True)
-  thread_id: str = Field(foreign_key="chatsession.thread_id")
-  role: str # "human" | "AI"
+  id: Optional[int] = Field(default=None, sa_column=Column("id", Integer, Identity(), primary_key=True))
+  thread_id: str = Field(default=None, sa_column=Column("thread_id", ForeignKey("chatsession.thread_id", ondelete="CASCADE")))
+  role: str
   node_name: Optional[str] = None
   content: Optional[str] = None
   state: Optional[dict] = Field(default=None, sa_column=Column("state", JSONB))
