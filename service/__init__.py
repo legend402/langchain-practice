@@ -85,6 +85,7 @@ def create_agent_service():
     if not result:
       return Result.error(f"未找到id为{id}的数据")
 
+    await session.exec(delete(ChatMessage).where(ChatMessage.thread_id == id))
     await session.delete(result)
     await session.commit()
     
@@ -101,9 +102,7 @@ def create_agent_service():
   @app.post("/chat/start")
   async def chat_start(body: ChatStart, session: AsyncSession = Depends(get_session)):
     agent = app.state.agent
-    
-    # if body.thread_id and session.get(ChatSession, body.thread_id):
-      
+       
     initial_state = get_initial_state({
       "user_query": body.query
     })
@@ -112,17 +111,26 @@ def create_agent_service():
     if body.thread_id is None:
       await create_session(session=session, thread_id=thread_id, title=body.query[:50])
     await create_message(session=session, thread_id=thread_id, role="human", content=body.query)
+    await session.commit()
 
-    return StreamingResponse(event_generator(agent, initial_state, session, thread_id), media_type="text/events-stream")
+    return StreamingResponse(event_generator(agent, initial_state, thread_id), media_type="text/events-stream")
+
+  @app.post("/chat/stop")
+  async def chat_start(body: ChatStart, session: AsyncSession = Depends(get_session)):
+    agent = app.state.agent
+
+    thread_id = body.thread_id or str(uuid4())
+    
+    return 
   
 
   @app.post("/chat/{session_id}/feedback")
-  async def chat_restore(session_id: str, body: ChatFeedback, session: AsyncSession = Depends(get_session)):
+  async def chat_restore(session_id: str, body: ChatFeedback):
     agent = app.state.agent
 
-    return StreamingResponse(event_generator(agent, Command(resume=body.model_dump()), session, session_id), media_type="text/events-stream")
+    return StreamingResponse(event_generator(agent, Command(resume=body.model_dump()), session_id), media_type="text/events-stream")
 
-  async def event_generator(agent: AgentType, initial_state: Any, session: AsyncSession, session_id: str):
+  async def event_generator(agent: AgentType, initial_state: Any, session_id: str):
     config = { "configurable": { "thread_id": session_id } }
     async for mode, state in agent.astream(initial_state, config, stream_mode=["updates", "custom"]):
       if mode == "custom":
@@ -139,7 +147,9 @@ def create_agent_service():
 
       state["session_id"] = session_id
       if "messages" in state[node]: del state[node]["messages"]
-      await create_message(session=session, thread_id=session_id, role="AI", node_name=node, content="", state=state)
+      async with AsyncSession(engine) as db:
+        await create_message(session=db, thread_id=session_id, role="AI", node_name=node, content="", state=state)
+        await db.commit()
       yield f"data: {json.dumps(state)}\n\n"
 
   return app
