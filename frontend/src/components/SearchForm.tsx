@@ -17,6 +17,7 @@ const LINE_HEIGHT = 24;
 export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composingRef = useRef(false);
 
   /**
    * 根据内容自动调整输入框高度
@@ -38,7 +39,7 @@ export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !composingRef.current) {
       e.preventDefault();
       handleSubmit(e);
     }
@@ -51,6 +52,8 @@ export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
           ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onCompositionStart={() => { composingRef.current = true; }}
+          onCompositionEnd={() => { composingRef.current = false; }}
           onKeyDown={handleKeyDown}
           placeholder="输入你要总结的知识点..."
           disabled={loading}
