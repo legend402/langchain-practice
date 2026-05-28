@@ -180,6 +180,46 @@ export function useAgentChat() {
     } catch {}
   }, [activeThreadId, startNewSession]);
 
+  const handleMessage = useCallback((event: SSEEventData) => {
+    // 此处处理流式输出的响应数据
+    if (event.stream_chunk) {
+      const { chunk, node_output_key } = event.stream_chunk;
+      setMessages(() => {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg && lastMsg.nodeName === node_output_key) {
+          const updatedMsg = { ...lastMsg, content: lastMsg.content + chunk };
+          return [...messages.slice(0, -1), updatedMsg];
+        } else {
+          return [...messages, { id: uuid(), role: "AI", content: chunk, timestamp: Date.now(), nodeName: node_output_key }];
+        }
+      });
+      return;
+    }
+    const nodeKey = getNodeKey(event);
+    if (!nodeKey) return;
+
+    const nodeData = event[nodeKey]!;
+    stateRef.current = accumulateState(stateRef.current, event, nodeKey);
+    setCurrentState({ ...stateRef.current });
+
+    if (nodeKey === "supervisor") {
+      return;
+    }
+
+    const isFinalize = nodeKey === "finalize";
+    const agentMsg: ChatMessage = {
+      id: uuid(),
+      role: "AI",
+      content: isFinalize
+        ? (nodeData as { final_answer: string }).final_answer
+        : getNodeSummary(nodeKey, nodeData),
+      state: { ...stateRef.current },
+      nodeName: nodeKey,
+      timestamp: Date.now(),
+    };
+    addMessage(agentMsg);
+  }, [addMessage, stateRef]);
+
   const submit = useCallback(
     async (query: string) => {
       const userMsg: ChatMessage = {
@@ -192,34 +232,11 @@ export function useAgentChat() {
       setLoading(true);
 
       stateRef.current = createInitialState();
-      setActiveThreadId(null);
 
       try {
-        await agentApi.submitSSETask({ query }, {
+        await agentApi.submitSSETask({ query, thread_id: activeThreadId }, {
           onMessage: (event: SSEEventData) => {
-            const nodeKey = getNodeKey(event);
-            if (!nodeKey) return;
-
-            const nodeData = event[nodeKey]!;
-            stateRef.current = accumulateState(stateRef.current, event, nodeKey);
-            setCurrentState({ ...stateRef.current });
-
-            if (nodeKey === "supervisor") {
-              return;
-            }
-
-            const isFinalize = nodeKey === "finalize";
-            const agentMsg: ChatMessage = {
-              id: uuid(),
-              role: "AI",
-              content: isFinalize
-                ? (nodeData as { final_answer: string }).final_answer
-                : getNodeSummary(nodeKey, nodeData),
-              state: { ...stateRef.current },
-              nodeName: nodeKey,
-              timestamp: Date.now(),
-            };
-            addMessage(agentMsg);
+            handleMessage(event);
 
             if (event.session_id) {
               setActiveThreadId(event.session_id);
@@ -249,7 +266,7 @@ export function useAgentChat() {
         setLoading(false);
       }
     },
-    [addMessage, refreshSessions],
+    [activeThreadId, addMessage, handleMessage, refreshSessions],
   );
 
   const submitFeedback = useCallback(
@@ -271,29 +288,7 @@ export function useAgentChat() {
           feedback,
           {
             onMessage: (event: SSEEventData) => {
-              const nodeKey = getNodeKey(event);
-              if (!nodeKey) return;
-
-              const nodeData = event[nodeKey]!;
-              stateRef.current = accumulateState(stateRef.current, event, nodeKey);
-              setCurrentState({ ...stateRef.current });
-
-              if (nodeKey === "supervisor") {
-                return;
-              }
-
-              const isFinalize = nodeKey === "finalize";
-              const agentMsg: ChatMessage = {
-                id: uuid(),
-                role: "AI",
-                content: isFinalize
-                  ? (nodeData as { final_answer: string }).final_answer
-                  : getNodeSummary(nodeKey, nodeData),
-                state: { ...stateRef.current },
-                nodeName: nodeKey,
-                timestamp: Date.now(),
-              };
-              addMessage(agentMsg);
+              handleMessage(event);
             },
             onError: (err: Error) => {
               const errMsg: ChatMessage = {
@@ -319,7 +314,7 @@ export function useAgentChat() {
         setLoading(false);
       }
     },
-    [currentState, addMessage],
+    [currentState, addMessage, handleMessage],
   );
 
   const showFeedbackPanel =

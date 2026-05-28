@@ -54,9 +54,9 @@ export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
           onKeyDown={handleKeyDown}
           placeholder="输入你要总结的知识点..."
           disabled={loading}
-          rows={1}
+          rows={3}
           className="w-full bg-transparent text-ink-100 text-base placeholder:text-ink-600 focus:outline-none disabled:opacity-50 resize-none leading-7 scrollbar-hide pr-12"
-          style={{ maxHeight: LINE_HEIGHT * MAX_ROWS, height: LINE_HEIGHT * 3 }}
+          style={{ maxHeight: LINE_HEIGHT * MAX_ROWS + 'px', height: LINE_HEIGHT * 3 + 'px' }}
         />
         <button
           type="submit"

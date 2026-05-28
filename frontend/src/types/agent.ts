@@ -124,6 +124,7 @@ export interface AgentState {
 
 export interface SubmitRequest {
   query: string;
+  thread_id?: string;
 }
 
 export interface ChatSession {
@@ -152,6 +153,7 @@ export interface ChatMessageFromDB {
 }
 
 export type SSEEventData = {
+  stream_chunk: { chunk: string; node_output_key: NodeKey };
   supervisor?: { supervisor_reason: string; next: string };
   search?: {
     search_results: SearchResult[];
