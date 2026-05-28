@@ -129,6 +129,7 @@ export function useAgentChat() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 768);
+  const [activeNode, setActiveNode] = useState<string>("");
   const stateRef = useRef<AgentState>(createInitialState());
 
   const addMessage = useCallback((msg: ChatMessage) => {
@@ -184,13 +185,14 @@ export function useAgentChat() {
     // 此处处理流式输出的响应数据
     if (event.stream_chunk) {
       const { chunk, node_output_key } = event.stream_chunk;
-      setMessages(() => {
-        const lastMsg = messages[messages.length - 1];
+      setActiveNode(node_output_key);
+      setMessages((prev) => {
+        const lastMsg = prev[prev.length - 1];
         if (lastMsg && lastMsg.nodeName === node_output_key) {
           const updatedMsg = { ...lastMsg, content: lastMsg.content + chunk };
-          return [...messages.slice(0, -1), updatedMsg];
+          return [...prev.slice(0, -1), updatedMsg];
         } else {
-          return [...messages, { id: uuid(), role: "AI", content: chunk, timestamp: Date.now(), nodeName: node_output_key }];
+          return [...prev, { id: uuid(), role: "AI", content: chunk, timestamp: Date.now(), nodeName: node_output_key }];
         }
       });
       return;
@@ -198,11 +200,23 @@ export function useAgentChat() {
     const nodeKey = getNodeKey(event);
     if (!nodeKey) return;
 
+    setActiveNode(nodeKey);
     const nodeData = event[nodeKey]!;
     stateRef.current = accumulateState(stateRef.current, event, nodeKey);
     setCurrentState({ ...stateRef.current });
 
     if (nodeKey === "supervisor") {
+      return;
+    }
+
+    if (nodeKey === "finalize") {
+      setMessages((prev) => {
+        const lastMsg = prev[prev.length - 1];
+        if (lastMsg && lastMsg.nodeName === "finalize") {
+          return [...prev.slice(0, -1), { ...lastMsg, state: { ...stateRef.current } }];
+        }
+        return prev;
+      });
       return;
     }
 
@@ -234,11 +248,13 @@ export function useAgentChat() {
       stateRef.current = createInitialState();
 
       try {
+        let sessionRefreshed = false;
         await agentApi.submitSSETask({ query, thread_id: activeThreadId }, {
           onMessage: (event: SSEEventData) => {
             handleMessage(event);
 
-            if (event.session_id) {
+            if (event.session_id && !sessionRefreshed) {
+              sessionRefreshed = true;
               setActiveThreadId(event.session_id);
               refreshSessions();
             }
@@ -327,6 +343,7 @@ export function useAgentChat() {
     messages,
     currentState,
     loading,
+    activeNode,
     submit,
     submitFeedback,
     showFeedbackPanel,
