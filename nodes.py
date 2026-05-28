@@ -146,9 +146,10 @@ async def finalize_node(state: AgentState):
   # result = create_structure_node(state, finalize_prompt, finalize_input)
   llm = init_deepseek_model()
   writer = get_stream_writer()
-  messages = [
-    SystemMessage(content=finalize_prompt.format(**finalize_input(state))),
-  ]
+  messages = ChatPromptTemplate.from_messages([
+    ("system", finalize_prompt)
+  ]).format_messages(**finalize_input(state))
+
   full_text = ""
   async for chunk in llm.astream(messages):
     if chunk.content:
