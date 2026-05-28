@@ -22,7 +22,7 @@ export default function App() {
 
       <div className={`flex-1 flex flex-col min-w-0 h-screen main-area ${chat.sidebarCollapsed ? "sidebar-collapsed" : "sidebar-expanded"}`}>
         <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 overflow-hidden" style={{ height: "calc(100vh)" }}>
-          <MessageList messages={chat.messages} loading={chat.loading} />
+          <MessageList messages={chat.messages} loading={chat.loading} currentState={chat.currentState} activeNode={chat.activeNode} />
           <div className="shrink-0 pb-4 pt-0 space-y-3">
             {chat.showFeedbackPanel && chat.currentState && (
               <FeedbackPanel

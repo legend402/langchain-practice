@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import type { ChatMessage } from "../types/agent";
+import type { AgentState, ChatMessage } from "../types/agent";
 import MarkdownRenderer from "./MarkdownRenderer";
 import ResultCard from "./ResultCard";
 import StateCard from "./StateCard";
@@ -20,7 +20,21 @@ import {
 interface MessageListProps {
   messages: ChatMessage[];
   loading: boolean;
+  currentState: AgentState | null;
+  activeNode: string;
 }
+
+const NODE_LOADING_TEXT: Record<string, string> = {
+  supervisor: "正在规划研究路径",
+  search: "正在获取相关资料",
+  read: "正在阅读并提取内容",
+  analyze: "正在分析知识结构",
+  tag: "正在提取标签和关键词",
+  knowledge: "正在生成知识总结",
+  review: "正在审核内容质量",
+  human: "等待人工审核",
+  finalize: "正在生成最终回答",
+};
 
 const NODE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   search: Search,
@@ -81,7 +95,7 @@ function StepCard({
   );
 }
 
-export default function MessageList({ messages, loading }: MessageListProps) {
+export default function MessageList({ messages, loading, currentState, activeNode }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -167,14 +181,17 @@ export default function MessageList({ messages, loading }: MessageListProps) {
             <Bot className="w-4 h-4 text-white" />
           </div>
           <div className="glass-card px-4 py-3">
-            <div className="flex items-center gap-2">
-              <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse-dot" />
-                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse-dot [animation-delay:0.3s]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse-dot [animation-delay:0.6s]" />
-              </div>
-              <span className="text-xs text-ink-400">正在处理...</span>
-            </div>
+            <span className="text-xs">
+              {[...(activeNode ? NODE_LOADING_TEXT[activeNode] ?? "正在处理" : "正在处理")].map((char, i) => (
+                <span
+                  key={`${activeNode}-${i}`}
+                  className="wave-char"
+                  style={{ animationDelay: `${i * 0.1}s, ${i * 0.12}s` }}
+                >
+                  {char === " " ? "\u00A0" : char}
+                </span>
+              ))}
+            </span>
           </div>
         </div>
       )}

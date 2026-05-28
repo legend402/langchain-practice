@@ -57,6 +57,37 @@
   animation: pulse-dot 1.5s ease-in-out infinite;
 }
 
+@keyframes wave-bounce {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  15% {
+    transform: translateY(-10px) scale(1.05);
+  }
+  30% {
+    transform: translateY(2px) scale(0.97);
+  }
+  45% {
+    transform: translateY(-4px) scale(1.02);
+  }
+  60% {
+    transform: translateY(1px) scale(0.99);
+  }
+}
+
+@keyframes gradient-shift {
+  0% { color: #6c5ce7; }
+  25% { color: #74b9ff; }
+  50% { color: #a29bfe; }
+  75% { color: #fd79a8; }
+  100% { color: #6c5ce7; }
+}
+
+.wave-char {
+  display: inline-block;
+  animation: wave-bounce 2s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite, gradient-shift 3.6s ease-in-out infinite;
+}
+
 @keyframes pulse-glow {
   0%, 100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0.3); }
   50% { box-shadow: 0 0 0 6px rgba(108, 92, 231, 0); }
