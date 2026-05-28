@@ -1,5 +1,6 @@
 import json, re
 import time
+import inspect
 from typing import Callable, Optional
 
 from langchain.messages import HumanMessage
@@ -22,22 +23,28 @@ type Hook= Callable[[AgentState], Optional[AgentState]]
 
 def node_hook(before_hook: Optional[Hook] = None, after_hook: Optional[Hook] = None):
   def decorator(func):
-    def wrapper(state: AgentState):
+    is_async = inspect.iscoroutinefunction(func)
+
+    async def _run(state: AgentState):
       if before_hook is not None:
         before_state = before_hook(state)
         if before_state is not None:
           state = before_state
 
-      # start = time.perf_counter()
-      # print(f"开始执行{state["next"]}任务节点")
-      new_state = func(state)
-      # print(f"{state["next"]}任务节点执行完毕，节点用时: {time.perf_counter() - start:.3f}s")
+      if is_async:
+        new_state = await func(state)
+      else:
+        new_state = func(state)
 
       if after_hook is not None:
         after_state = after_hook(new_state)
         if after_state is not None:
           new_state = after_state
       return new_state
+
+    async def wrapper(state: AgentState):
+      return await _run(state)
+
     return wrapper
   return decorator
 
