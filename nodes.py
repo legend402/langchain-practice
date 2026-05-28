@@ -1,6 +1,8 @@
 from typing import Callable
+from langchain.messages import SystemMessage
 from langchain_classic.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
+from langgraph.graph.ui import get_stream_writer
 from langgraph.types import interrupt
 from agent.create_tools_agent import create_tools_agent
 from config import AgentState
@@ -140,10 +142,24 @@ def human_gate_node(state: AgentState):
   return result
 
 @node_hook()
-def finalize_node(state: AgentState):
-  result = create_structure_node(state, finalize_prompt, finalize_input)
-  result["messages"] = state["messages"] + [("AI", f"[finalize]: {result["final_answer"]}")]
-  return result
+async def finalize_node(state: AgentState):
+  # result = create_structure_node(state, finalize_prompt, finalize_input)
+  llm = init_deepseek_model()
+  writer = get_stream_writer()
+  messages = [
+    SystemMessage(content=finalize_prompt.format(**finalize_input(state))),
+  ]
+  full_text = ""
+  async for chunk in llm.astream(messages):
+    if chunk.content:
+      full_text += chunk.content
+      writer({ "stream_chunk": { "chunk": chunk.content, "node_output_key": "finalize" } })
+
+  return {
+    "final_answer": full_text,
+    "trace": ["finalize completed"],
+    "messages": state["messages"] + [("AI", f"[finalize]: {full_text}")]
+  }
 
 def route_supervisor_node(state: AgentState):
   """总体路由"""

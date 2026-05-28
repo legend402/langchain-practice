@@ -6,7 +6,6 @@ import os
 
 from config import AgentState
 from graph import _build_graph
-from nodes import supervisor_node
 from utils.rich_print import enable_rich_print
 
 load_dotenv()

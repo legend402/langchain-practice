@@ -8,9 +8,10 @@ def init_deepseek_model():
     api_key = os.getenv("DEEPSEEK_API_KEY"),
     stream_usage = True,
     streaming = True,
+    max_tokens = 100000,
     extra_body = {
       "thinking": {"type": "disabled"},
-      "max_tokens": 100000,
-    }
+      "type": "json_object",
+    },
   )
   return llm

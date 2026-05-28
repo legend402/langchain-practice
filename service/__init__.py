@@ -1,6 +1,11 @@
 import json
+import warnings
 from contextlib import asynccontextmanager
-from typing import Any
+
+import langchain_core._api.deprecation
+warnings.filterwarnings("ignore", message=".*allowed_objects.*")
+
+from typing import Any, Optional
 from uuid import uuid4
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI
@@ -13,8 +18,12 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
 import os
 
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="langgraph")
+
 from sqlmodel import select, delete
 from sqlmodel.ext.asyncio.session import AsyncSession
+
+load_dotenv()
 
 from config import AgentState
 from graph import _build_graph
@@ -25,14 +34,13 @@ from service.db.db import ChatMessage, Roles
 from service.result import Result
 from utils import get_initial_state
 
-load_dotenv()
-
 DB_URI = os.getenv("PGSQL_DB_URI")
 
 type AgentType = CompiledStateGraph[AgentState, None, AgentState, AgentState]
 
 class ChatStart(BaseModel):
   query: str
+  thread_id: Optional[str] = None
   
 class ChatFeedback(BaseModel):
   decision:str
@@ -93,11 +101,16 @@ def create_agent_service():
   @app.post("/chat/start")
   async def chat_start(body: ChatStart, session: AsyncSession = Depends(get_session)):
     agent = app.state.agent
+    
+    # if body.thread_id and session.get(ChatSession, body.thread_id):
+      
     initial_state = get_initial_state({
       "user_query": body.query
     })
-    thread_id = str(uuid4())
-    await create_session(session=session, thread_id=thread_id, title=body.query[:50])
+    thread_id = body.thread_id or str(uuid4())
+    
+    if body.thread_id is None:
+      await create_session(session=session, thread_id=thread_id, title=body.query[:50])
     await create_message(session=session, thread_id=thread_id, role="human", content=body.query)
 
     return StreamingResponse(event_generator(agent, initial_state, session, thread_id), media_type="text/events-stream")
@@ -111,16 +124,21 @@ def create_agent_service():
 
   async def event_generator(agent: AgentType, initial_state: Any, session: AsyncSession, session_id: str):
     config = { "configurable": { "thread_id": session_id } }
-    async for _, state in agent.astream(initial_state, config, stream_mode=["updates", "custom"]):
+    async for mode, state in agent.astream(initial_state, config, stream_mode=["updates", "custom"]):
+      if mode == "custom":
+        state["session_id"] = session_id
+        yield f"data: {json.dumps(state)}\n\n"
+        continue
+      
       if "__interrupt__" in state:
         interrupt_state = { "human": state["__interrupt__"][0].value, "session_id": session_id }
         yield f"data: {json.dumps(interrupt_state)}\n\n"
         continue
-      print(state)
+
       node = list(state.keys())[0] if state else None
 
       state["session_id"] = session_id
-      if "messages" in state: del state["messages"]
+      if "messages" in state[node]: del state[node]["messages"]
       await create_message(session=session, thread_id=session_id, role="AI", node_name=node, content="", state=state)
       yield f"data: {json.dumps(state)}\n\n"
 

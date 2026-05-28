@@ -198,8 +198,7 @@ search_prompt = """
 不要输出长篇解释。
 完整的网页正文内容存入content字段，超过5000字就自动精简，但是要保证重要信息不丢失
 
-不要输出任何多余的内容，只输出 JSON
-EXAMPLE JSON OUTPUT:
+不要输出任何多余的内容，只输出 JSON:
 {{
   "search_results": [
     {{
@@ -751,12 +750,7 @@ finalize_prompt = """
 
 如果 review_result.status 不是 pass，且 human_feedback.decision 不是 approved，不要输出正式总结，应说明仍需确认。
 
-只输出 JSON：
-
-{{
-  "final_answer": "最终 Markdown 文本",
-  "trace": ["finalize completed"]
-}}
+只输出最后的markdown文本
 """
 
 def finalize_input(state: AgentState) -> dict:
