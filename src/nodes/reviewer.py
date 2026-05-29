@@ -76,8 +76,8 @@ def reviewer_input(state: AgentState) -> dict:
     }
 
 @node_hook()
-def reviewer_node(state: AgentState):
-    result = create_structure_node(state, reviewer_prompt, reviewer_input)
+async def reviewer_node(state: AgentState):
+    result = await create_structure_node(state, reviewer_prompt, reviewer_input)
     result["messages"] = state["messages"] + [("AI", get_state_message("review", result))]
     return result
 

@@ -88,7 +88,7 @@ def knowledge_input(state: AgentState) -> dict:
     }
 
 @node_hook(after_hook=next_redirect)
-def knowledge_node(state: AgentState):
-    result = create_structure_node(state, knowledge_prompt, knowledge_input)
+async def knowledge_node(state: AgentState):
+    result = await create_structure_node(state, knowledge_prompt, knowledge_input)
     result["messages"] = state["messages"] + [("AI", get_state_message("knowledge", result))]
     return result

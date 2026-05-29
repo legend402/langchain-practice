@@ -58,8 +58,8 @@ def human_gate_input(state: AgentState) -> dict:
     }
 
 @node_hook()
-def human_gate_node(state: AgentState):
-    result = create_structure_node(state, human_gate_prompt, human_gate_input)
+async def human_gate_node(state: AgentState):
+    result = await create_structure_node(state, human_gate_prompt, human_gate_input)
     result["messages"] = state["messages"] + [("AI", get_state_message("human", result))]
     feedback = interrupt({
         "human_message": result.get("human_message", ""),

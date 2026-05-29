@@ -72,7 +72,7 @@ def analyse_input(state: AgentState) -> dict:
     }
 
 @node_hook(after_hook=next_redirect)
-def analyze_node(state: AgentState):
-    result = create_structure_node(state, analyze_prompt, analyse_input)
+async def analyze_node(state: AgentState):
+    result = await create_structure_node(state, analyze_prompt, analyse_input)
     result["messages"] = state["messages"] + [("AI", get_state_message("analyze", result))]
     return result

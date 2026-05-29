@@ -58,7 +58,7 @@ def tag_input(state: AgentState) -> dict:
     }
 
 @node_hook(after_hook=next_redirect)
-def tag_node(state: AgentState):
-    result = create_structure_node(state, tag_prompt, tag_input)
+async def tag_node(state: AgentState):
+    result = await create_structure_node(state, tag_prompt, tag_input)
     result["messages"] = state["messages"] + [("AI", get_state_message("tag", result))]
     return result

@@ -71,7 +71,7 @@ def reader_input(state: AgentState) -> dict:
     }
 
 @node_hook(after_hook=next_redirect)
-def read_node(state: AgentState):
-    result = create_structure_node(state, reader_prompt, reader_input)
+async def read_node(state: AgentState):
+    result = await create_structure_node(state, reader_prompt, reader_input)
     result["messages"] = [("AI", get_state_message("read", result))]
     return result
