@@ -7,13 +7,13 @@ from src.config import AgentState
 from src.llm import init_model
 from src.utils import extract_json
 
-def create_structure_node(state: AgentState, prompt: str, struct_input: Callable[[AgentState], dict]):
+async def create_structure_node(state: AgentState, prompt: str, struct_input: Callable[[AgentState], dict]):
     """定义结构化的节点，以便复用"""
     try:
         llm = init_model()
         system_prompt = ChatPromptTemplate([("system", prompt)])
         chain = system_prompt | llm | JsonOutputParser()
-        result = chain.invoke(struct_input(state))
+        result = await chain.ainvoke(struct_input(state))
     except Exception as e:
         return {"errors": [f"节点执行失败: {str(e)}"], "next": "supervisor"}
     return result

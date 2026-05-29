@@ -78,7 +78,7 @@ def searcher_input(state: AgentState) -> dict:
     }
 
 @node_hook(after_hook=next_redirect)
-def search_node(state: AgentState):
+async def search_node(state: AgentState):
     from src.tools.web_search import web_search
     from src.tools.web_fetch import web_fetch
 
@@ -88,7 +88,7 @@ def search_node(state: AgentState):
     ]).format_messages(**searcher_input(state))
 
     llm_with_tools = create_tools_agent(llm=llm, tools=[web_search, web_fetch])
-    response = llm_with_tools.invoke(messages)
+    response = await llm_with_tools.ainvoke(messages)
 
     search_state = extract_json(response[-1].content)
     if search_state is None:

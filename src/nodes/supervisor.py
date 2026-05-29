@@ -190,13 +190,13 @@ def _validate_supervisor_result(result: dict, state: AgentState) -> dict:
             )
     return result
 
-def supervisor_node(state: AgentState):
+async def supervisor_node(state: AgentState):
     llm = init_model()
     system_prompt = ChatPromptTemplate.from_messages([
         ("system", supervisor_prompt),
     ])
     supervisor_chain = system_prompt | llm | JsonOutputParser()
-    result = supervisor_chain.invoke(supervisor_input(state))
+    result = await supervisor_chain.ainvoke(supervisor_input(state))
     result = _validate_supervisor_result(result, state)
     messages = state["messages"] + [("AI", get_state_message("supervisor", result))]
     result["messages"] = messages
