@@ -8,6 +8,7 @@ from src.llm import init_model
 from src.utils import extract_json
 
 def create_structure_node(state: AgentState, prompt: str, struct_input: Callable[[AgentState], dict]):
+    """定义结构化的节点，以便复用"""
     try:
         llm = init_model()
         system_prompt = ChatPromptTemplate([("system", prompt)])

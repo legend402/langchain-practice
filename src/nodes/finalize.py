@@ -63,6 +63,7 @@ def finalize_input(state: AgentState) -> dict:
 
 @node_hook()
 async def finalize_node(state: AgentState):
+    # result = create_structure_node(state, finalize_prompt, finalize_input)
     llm = init_model()
     writer = get_stream_writer()
     messages = ChatPromptTemplate.from_messages([

@@ -70,4 +70,5 @@ def human_gate_node(state: AgentState):
     return result
 
 def route_human_gate_node(state: AgentState):
+    """用户判断应该走哪一条路线"""
     return state["human_feedback"]["decision"]

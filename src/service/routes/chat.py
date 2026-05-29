@@ -58,9 +58,10 @@ async def chat_start(body: ChatStart, session: AsyncSession = Depends(get_sessio
     thread_id = body.thread_id or str(uuid4())
 
     state = {"user_query": body.query}
-
+    # 如果没有会话记录，就创建新的记录
     if body.thread_id is None:
         await create_session(session=session, thread_id=thread_id, title=body.query[:50])
+    # 如果存在记录，就获取完整的记录，然后重新把记录传回get_initial_state，恢复上下文
     elif session.get(ChatSession, thread_id):
         messages = await get_messages(session, thread_id)
         state = recover_state(messages)
