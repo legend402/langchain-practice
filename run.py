@@ -1,3 +1,3 @@
 import uvicorn
 
-uvicorn.run("service:app", port=4030)
+uvicorn.run("src.service:app", port=4030, reload=True)
