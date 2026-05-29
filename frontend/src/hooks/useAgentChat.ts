@@ -168,6 +168,7 @@ export function useAgentChat() {
     setMessages([]);
     setCurrentState(null);
     setActiveThreadId(null);
+    setActiveNode("");
     stateRef.current = createInitialState();
   }, []);
 
@@ -220,15 +221,18 @@ export function useAgentChat() {
     const nodeKey = getNodeKey(event);
     if (!nodeKey) return;
 
-    setActiveNode(nodeKey);
     const nodeData = event[nodeKey]!;
     stateRef.current = accumulateState(stateRef.current, event, nodeKey);
     setCurrentState({ ...stateRef.current });
 
     if (nodeKey === "supervisor") {
+      const nextNode = (nodeData as { next: string })?.next;
+      if (nextNode) {
+        setActiveNode(nextNode);    // 用 supervisor 决策的下一步预设 loading
+      }
       return;
     }
-
+    setActiveNode(nodeKey);
     if (nodeKey === "finalize") {
       setMessages((prev) => {
         const lastMsg = prev[prev.length - 1];
@@ -263,6 +267,7 @@ export function useAgentChat() {
         timestamp: Date.now(),
       };
       addMessage(userMsg);
+      setActiveNode("");
       setLoading(true);
 
       stateRef.current = createInitialState();
