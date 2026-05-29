@@ -152,6 +152,14 @@ export interface ChatMessageFromDB {
   create_at: string;
 }
 
+export interface ResponseResult<T = void> {
+  success: boolean;
+  result: T;
+  message: string;
+  code: number;
+  timestamp: number;
+}
+
 export type SSEEventData = {
   stream_chunk: { chunk: string; node_output_key: NodeKey };
   supervisor?: { supervisor_reason: string; next: string };

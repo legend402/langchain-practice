@@ -8,11 +8,13 @@ import type {
   ChatMessage,
   AgentState,
   NodeKey,
+  ResponseResult,
 } from "../types/agent";
 
 const API_BASE = "http://localhost:4030";
 
 export interface AgentApi {
+  abort: AbortController;
   submitSSETask: (
     request: SubmitRequest,
     events: SSEEventHandler,
@@ -22,6 +24,8 @@ export interface AgentApi {
     feedback: HumanFeedback,
     events: SSEEventHandler,
   ) => Promise<void>;
+  stopChat: (sessionId: string) => Promise<ResponseResult>;
+  dispatchEvent: (events: SSEEventHandler, response: Response) => Promise<void>;
   getSessions: () => Promise<ChatSession[]>;
   getMessages: (threadId: string) => Promise<ChatMessage[]>;
   deleteSession: (threadId: string) => Promise<void>;
@@ -109,52 +113,21 @@ function parseMessages(rows: ChatMessageFromDB[]): ChatMessage[] {
 }
 
 const realApi: AgentApi = {
+  abort: new AbortController(),
   async submitSSETask(
     request: SubmitRequest,
     events: SSEEventHandler,
   ): Promise<void> {
+    agentApi.abort.abort();
+    agentApi.abort = new AbortController();
     const response = await fetch(`${API_BASE}/chat/start`, {
       method: "POST",
-      body: JSON.stringify(request),
       headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      signal: agentApi.abort.signal,
     });
-
-    if (!response.ok || !response.body) {
-      events.onError?.(new Error(`请求失败: ${response.status}`));
-      return;
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        events.onClose?.();
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data: ")) continue;
-        const payload = trimmed.slice(6);
-        if (payload === "[DONE]") {
-          events.onClose?.();
-          return;
-        }
-        try {
-          const parsed: SSEEventData = JSON.parse(payload);
-          events.onMessage?.(parsed);
-        } catch {
-          // skip non-JSON lines
-        }
-      }
-    }
+    
+    await agentApi.dispatchEvent(events, response);
   },
 
   async submitFeedback(
@@ -162,12 +135,17 @@ const realApi: AgentApi = {
     feedback: HumanFeedback,
     events: SSEEventHandler,
   ): Promise<void> {
+    agentApi.abort.abort();
+    agentApi.abort = new AbortController();
     const response = await fetch(`${API_BASE}/chat/${sessionId}/feedback`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(feedback),
+      signal: agentApi.abort.signal,
     });
-
+    await agentApi.dispatchEvent(events, response);
+  },
+  async dispatchEvent(events: SSEEventHandler, response: Response) {
     if (!response.ok || !response.body) {
       events.onError?.(new Error(`请求失败: ${response.status}`));
       return;
@@ -205,7 +183,15 @@ const realApi: AgentApi = {
       }
     }
   },
-
+  async stopChat(session_id: string) {
+    agentApi.abort.abort();
+    const res = await fetch(`${API_BASE}/chat/${session_id}/stop`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error(`停止会话失败: ${res.status}`);
+    const data = await res.json();
+    return data;
+  },
   async getSessions(): Promise<ChatSession[]> {
     const res = await fetch(`${API_BASE}/chat/sessions`);
     if (!res.ok) throw new Error(`获取会话列表失败: ${res.status}`);

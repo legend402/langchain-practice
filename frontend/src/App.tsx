@@ -31,7 +31,7 @@ export default function App() {
                 disabled={chat.loading}
               />
             )}
-            <SearchForm onSubmit={chat.submit} loading={chat.loading} />
+            <SearchForm onSubmit={chat.submit} onStop={chat.stop} loading={chat.loading} />
           </div>
         </main>
       </div>

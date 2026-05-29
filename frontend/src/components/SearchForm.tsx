@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { Loader2, ArrowUp } from "lucide-react";
+import { ArrowUp, Square } from "lucide-react";
 
 interface SearchFormProps {
   onSubmit: (query: string) => void;
+  onStop: () => void;
   loading: boolean;
 }
 
@@ -14,7 +15,7 @@ const LINE_HEIGHT = 24;
  * @param onSubmit 提交回调
  * @param loading 是否加载中
  */
-export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
+export default function SearchForm({ onSubmit, onStop, loading }: SearchFormProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
@@ -62,12 +63,13 @@ export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
           style={{ maxHeight: LINE_HEIGHT * MAX_ROWS + 'px', height: LINE_HEIGHT * 3 + 'px' }}
         />
         <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="absolute right-4 bottom-4 w-9 h-9 rounded-full bg-accent flex items-center justify-center text-white hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          type={loading ? "button" : "submit"}
+          disabled={!loading && !input.trim()}
+          onClick={loading ? (e) => { e.preventDefault(); onStop(); } : undefined}
+          className={`absolute right-4 bottom-4 w-9 h-9 rounded-full flex items-center justify-center text-white transition-colors ${loading ? "bg-red-500 hover:bg-red-600" : "bg-accent hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"}`}
         >
           {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Square className="w-4 h-4 fill-white" />
           ) : (
             <ArrowUp className="w-4 h-4" />
           )}

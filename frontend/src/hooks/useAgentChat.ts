@@ -182,7 +182,27 @@ export function useAgentChat() {
   }, [activeThreadId, startNewSession]);
 
   const handleMessage = useCallback((event: SSEEventData) => {
-    // 此处处理流式输出的响应数据
+    if ((event as Record<string, unknown>).type === "stopped") {
+      setLoading(false);
+      setActiveNode("");
+      addMessage({
+        id: uuid(),
+        role: "AI",
+        content: "已停止生成",
+        timestamp: Date.now(),
+      });
+      return;
+    }
+    if ((event as Record<string, unknown>).type === "error") {
+      setLoading(false);
+      addMessage({
+        id: uuid(),
+        role: "AI",
+        content: `处理出错: ${(event as Record<string, unknown>).error}`,
+        timestamp: Date.now(),
+      });
+      return;
+    }
     if (event.stream_chunk) {
       const { chunk, node_output_key } = event.stream_chunk;
       setActiveNode(node_output_key);
@@ -333,6 +353,15 @@ export function useAgentChat() {
     [currentState, addMessage, handleMessage],
   );
 
+  const stop = useCallback(async () => {
+    if (!activeThreadId) return;
+    try {
+      await agentApi.stopChat(activeThreadId);
+    } catch {}
+    setLoading(false);
+    setActiveNode("");
+  }, [activeThreadId]);
+
   const showFeedbackPanel =
     currentState?.next === "human" ||
     currentState?.review_result?.status === "need_human";
@@ -346,6 +375,7 @@ export function useAgentChat() {
     activeNode,
     submit,
     submitFeedback,
+    stop,
     showFeedbackPanel,
     showResultCard,
     sessions,
