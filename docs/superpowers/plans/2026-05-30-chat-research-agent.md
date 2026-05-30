@@ -1,0 +1,858 @@
+# Chat + Research Agent 实现计划
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 将现有 research agent 改造为 chat 优先架构，主 agent 处理日常对话，需要深度研究时通过 tool calling 触发 research subgraph。
+
+**Architecture:** 主图只有一个 chat 节点，绑定 research tool。LLM 自主决定是否调用 research。Research 子图是现有 graph 移除 human_gate 后的版本，tool 内部通过 astream + stream_writer 转发事件到主图 SSE。
+
+**Tech Stack:** LangGraph (StateGraph, CompiledStateGraph, stream_writer), LangChain (ChatOpenAI, tool calling), FastAPI SSE, React TypeScript
+
+---
+
+## 文件结构
+
+### 新增文件
+| 文件 | 职责 |
+|------|------|
+| `src/config_chat.py` | ChatState 定义 |
+| `src/nodes/chat.py` | chat 节点 + system prompt + 流式输出 |
+| `src/tools/research.py` | research tool 定义与实现（astream + stream_writer 转发） |
+| `src/graph_chat.py` | 主图构建（chat 节点 + research tool 绑定） |
+
+### 修改文件
+| 文件 | 改动 |
+|------|------|
+| `src/graph.py` | 移除 human_gate 节点和边，导出 `_build_research_graph` |
+| `src/nodes/__init__.py` | 移除 human_gate 导出 |
+| `src/nodes/reviewer.py` | prompt 移除 need_human 选项，只保留 pass/replan |
+| `src/nodes/supervisor.py` | prompt 移除 human 相关规则 |
+| `src/service/__init__.py` | 使用新的主图 `graph_chat` |
+| `src/service/routes/sse.py` | event_generator 区分 chat/research 事件 |
+| `src/service/routes/chat.py` | 适配新主图，移除 feedback 相关路由 |
+| `src/main.py` | 适配新图 |
+| `frontend/src/types/agent.ts` | 新增 chat 相关 SSE event 类型 |
+| `frontend/src/hooks/useAgentChat.ts` | 区分 chat/research 事件，支持 chat 消息流式展示 |
+| `frontend/src/components/MessageList.tsx` | 支持展示 chat 类型消息 |
+
+---
+
+### Task 1: 新增 ChatState 定义
+
+**Files:**
+- Create: `src/config_chat.py`
+
+- [ ] **Step 1: 创建 ChatState**
+
+```python
+# src/config_chat.py
+from typing import TypedDict, Optional
+from langchain_core.messages import BaseMessage
+
+
+class ChatState(TypedDict, total=False):
+    messages: list[BaseMessage]
+    user_query: str
+    research_result: Optional[str]
+    research_active: bool
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/config_chat.py
+git commit -m "feat: add ChatState definition for main graph"
+```
+
+---
+
+### Task 2: 改造 research subgraph（移除 human_gate）
+
+**Files:**
+- Modify: `src/graph.py`
+- Modify: `src/nodes/__init__.py`
+- Modify: `src/nodes/reviewer.py`
+- Modify: `src/nodes/supervisor.py`
+
+- [ ] **Step 1: 修改 `src/nodes/reviewer.py` — 移除 need_human**
+
+将 `reviewer_prompt` 中的审核结果选项从三个改为两个，移除 `need_human` 相关内容：
+
+将 prompt 中的：
+```
+审核结果只能是：
+
+- pass：可以进入 finalize。
+- replan：系统可以自行修复，应回到 supervisor。
+- need_human：必须由用户确认，应进入 human_gate。
+```
+
+改为：
+```
+审核结果只能是：
+
+- pass：可以进入 finalize。
+- replan：系统可以自行修复，应回到 supervisor。
+```
+
+将 JSON 输出模板中的：
+```
+"status": "pass | replan | need_human",
+```
+改为：
+```
+"status": "pass | replan",
+```
+
+移除 `"need_human_reason"` 字段。
+
+将 `src/config.py` 中的 `ReviewStatus` 类型：
+```python
+ReviewStatus = Literal[
+    "pass",
+    "replan",
+    "need_human",
+]
+```
+改为：
+```python
+ReviewStatus = Literal[
+    "pass",
+    "replan",
+]
+```
+
+- [ ] **Step 2: 修改 `src/nodes/supervisor.py` — 移除 human 相关规则**
+
+在 `supervisor_prompt` 中：
+1. 移除 `最近人工反馈：` 占位符和 `{human_feedback}` 变量
+2. 从 `next` 选项列表中移除 `human`
+3. 移除所有引用 `human_feedback` 的规则（规则 0, 1, 2, 13, 15, 16）
+4. 移除规则 2（最大迭代次数限制时选 human）——改为选 finalize 并附带警告
+5. 重新编号剩余规则
+
+将 `supervisor_input` 函数中移除 `human_feedback` 字段。
+
+将 `_validate_supervisor_result` 函数中移除 `human_approved` 相关逻辑（`human_feedback` 判断分支）。
+
+将 `NextStep` 类型（`src/config.py`）中移除 `"human"` 和 `"supervisor"`（supervisor 作为内部节点不需要在 NextStep 中）。
+
+- [ ] **Step 3: 修改 `src/nodes/__init__.py` — 移除 human_gate 导出**
+
+```python
+# src/nodes/__init__.py
+from src.nodes.supervisor import supervisor_node, route_supervisor_node
+from src.nodes.search import search_node
+from src.nodes.reader import read_node
+from src.nodes.analyzer import analyze_node
+from src.nodes.tagger import tag_node
+from src.nodes.knowledge import knowledge_node
+from src.nodes.reviewer import reviewer_node, route_review_node
+from src.nodes.finalize import finalize_node
+```
+
+- [ ] **Step 4: 修改 `src/graph.py` — 导出 research subgraph 构建函数**
+
+```python
+# src/graph.py
+from langgraph.func import END, START
+from langgraph.graph import StateGraph
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+from src.config import AgentState
+from src.nodes import (
+    supervisor_node, search_node, read_node, analyze_node,
+    tag_node, knowledge_node, reviewer_node,
+    finalize_node, route_supervisor_node, route_review_node,
+)
+
+
+def _build_research_graph():
+    builder = StateGraph(AgentState)
+    builder.add_node("supervisor", supervisor_node)
+    builder.add_node("search", search_node)
+    builder.add_node("read", read_node)
+    builder.add_node("analyze", analyze_node)
+    builder.add_node("tag", tag_node)
+    builder.add_node("knowledge", knowledge_node)
+    builder.add_node("review", reviewer_node)
+    builder.add_node("finalize", finalize_node)
+
+    builder.add_edge(START, "supervisor")
+    builder.add_edge("search", "supervisor")
+    builder.add_edge("read", "supervisor")
+    builder.add_edge("analyze", "supervisor")
+    builder.add_edge("tag", "supervisor")
+    builder.add_edge("knowledge", "supervisor")
+    builder.add_edge("finalize", END)
+
+    builder.add_conditional_edges("supervisor", route_supervisor_node, {
+        "search": "search",
+        "read": "read",
+        "analyze": "analyze",
+        "tag": "tag",
+        "knowledge": "knowledge",
+        "review": "review",
+        "finalize": "finalize",
+    })
+
+    builder.add_conditional_edges("review", route_review_node, {
+        "replan": "supervisor",
+        "pass": "finalize",
+    })
+
+    return builder.compile()
+
+
+def _build_graph(checkpointer: AsyncPostgresSaver):
+    builder = StateGraph(AgentState)
+    builder.add_node("supervisor", supervisor_node)
+    builder.add_node("search", search_node)
+    builder.add_node("read", read_node)
+    builder.add_node("analyze", analyze_node)
+    builder.add_node("tag", tag_node)
+    builder.add_node("knowledge", knowledge_node)
+    builder.add_node("review", reviewer_node)
+    builder.add_node("finalize", finalize_node)
+
+    builder.add_edge(START, "supervisor")
+    builder.add_edge("search", "supervisor")
+    builder.add_edge("read", "supervisor")
+    builder.add_edge("analyze", "supervisor")
+    builder.add_edge("tag", "supervisor")
+    builder.add_edge("knowledge", "supervisor")
+    builder.add_edge("finalize", END)
+
+    builder.add_conditional_edges("supervisor", route_supervisor_node, {
+        "search": "search",
+        "read": "read",
+        "analyze": "analyze",
+        "tag": "tag",
+        "knowledge": "knowledge",
+        "review": "review",
+        "finalize": "finalize",
+    })
+
+    builder.add_conditional_edges("review", route_review_node, {
+        "replan": "supervisor",
+        "pass": "finalize",
+    })
+
+    return builder.compile(checkpointer=checkpointer)
+```
+
+注意：`_build_research_graph()` 不传 checkpointer，作为 tool 内部使用的轻量子图。`_build_graph()` 保持原有签名，用于兼容旧的 CLI 调试入口。
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/graph.py src/nodes/__init__.py src/nodes/reviewer.py src/nodes/supervisor.py src/config.py
+git commit -m "refactor: remove human_gate from research subgraph"
+```
+
+---
+
+### Task 3: 新增 Research Tool
+
+**Files:**
+- Create: `src/tools/research.py`
+
+- [ ] **Step 1: 创建 research tool**
+
+```python
+# src/tools/research.py
+from langchain_core.tools import tool
+from langgraph.graph.ui import get_stream_writer
+
+from src.graph import _build_research_graph
+from src.utils.agent import get_initial_state
+
+
+@tool
+async def research(user_query: str, task_goal: str = "") -> str:
+    """深度研究工具。当用户需要总结知识、分析资料、搜索多个来源后生成结构化报告时调用。
+    适合需要搜索、阅读、分析多个来源后生成结构化总结的场景。
+    当用户消息以 /research 开头时必须调用此工具。"""
+    research_graph = _build_research_graph()
+    initial_state = get_initial_state({"user_query": user_query, "task_goal": task_goal})
+    writer = get_stream_writer()
+
+    final_state: dict = {}
+    try:
+        async for mode, event in research_graph.astream(
+            initial_state,
+            stream_mode=["updates", "custom"],
+        ):
+            if mode == "custom":
+                event["source"] = "research"
+                writer(event)
+            elif mode == "updates":
+                if not event:
+                    continue
+                node = list(event.keys())[0]
+                if node == "__interrupt__":
+                    continue
+                writer({"source": "research", "type": "node_update", "node": node, "state": event})
+                if node in event and isinstance(event[node], dict):
+                    final_state.update(event[node])
+
+        return final_state.get("final_answer", "研究未产生结果")
+    except Exception as e:
+        return f"研究过程中出错: {str(e)}"
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/tools/research.py
+git commit -m "feat: add research tool with stream forwarding"
+```
+
+---
+
+### Task 4: 新增 Chat 节点
+
+**Files:**
+- Create: `src/nodes/chat.py`
+
+- [ ] **Step 1: 创建 chat 节点**
+
+```python
+# src/nodes/chat.py
+import os
+
+from langchain_classic.prompts import ChatPromptTemplate
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
+from langgraph.graph.ui import get_stream_writer
+
+from src.config_chat import ChatState
+from src.llm import init_model
+from src.tools.research import research
+
+
+CHAT_SYSTEM_PROMPT = """你是一个知识助手。你可以：
+1. 直接回答用户的简单问题（闲聊、解释概念、提供建议）
+2. 当用户需要深度研究时，调用 research 工具
+
+触发 research 的场景：
+- 用户要求总结、分析、深度研究某个话题
+- 用户消息以 /research 开头（必须调用）
+- 需要搜索多个来源并综合分析
+
+不触发 research 的场景：
+- 简单问答、闲聊、已有知识的解释
+
+当 research 工具返回结果后：
+- 如果结果质量 OK，基于结果生成最终回复
+- 如果结果不完整或有误，可以再次调用 research 或补充说明
+
+回复使用中文。"""
+
+
+def init_chat_model():
+    return init_model(
+        base_url=os.getenv("CHAT_LLM_BASE_URL", None),
+        model=os.getenv("CHAT_LLM_MODEL", None),
+    )
+
+
+async def chat_node(state: ChatState) -> dict:
+    llm = init_chat_model()
+    llm_with_tools = llm.bind_tools([research])
+    writer = get_stream_writer()
+
+    messages = [SystemMessage(content=CHAT_SYSTEM_PROMPT)] + state.get("messages", [])
+
+    response = await llm_with_tools.ainvoke(messages)
+
+    while response.tool_calls:
+        for tool_call in response.tool_calls:
+            messages.append(response)
+            if tool_call["name"] == "research":
+                writer({"source": "research", "type": "research_start"})
+                result = await research.ainvoke(tool_call["args"])
+                tool_msg = ToolMessage(content=str(result), tool_call_id=tool_call["id"])
+                messages.append(tool_msg)
+                writer({"source": "research", "type": "research_end", "result": result})
+
+        response = await llm_with_tools.ainvoke(messages)
+
+    writer({"stream_chunk": {"chunk": response.content, "node_output_key": "chat"}})
+
+    return {
+        "messages": messages + [response],
+    }
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/nodes/chat.py
+git commit -m "feat: add chat node with research tool binding"
+```
+
+---
+
+### Task 5: 新增主图构建
+
+**Files:**
+- Create: `src/graph_chat.py`
+
+- [ ] **Step 1: 创建主图**
+
+```python
+# src/graph_chat.py
+from langgraph.func import END, START
+from langgraph.graph import StateGraph
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+from src.config_chat import ChatState
+from src.nodes.chat import chat_node
+
+
+def _build_chat_graph(checkpointer: AsyncPostgresSaver):
+    builder = StateGraph(ChatState)
+    builder.add_node("chat", chat_node)
+    builder.add_edge(START, "chat")
+    builder.add_edge("chat", END)
+    return builder.compile(checkpointer=checkpointer)
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/graph_chat.py
+git commit -m "feat: add main chat graph builder"
+```
+
+---
+
+### Task 6: 改造 Service 层
+
+**Files:**
+- Modify: `src/service/__init__.py`
+- Modify: `src/service/routes/sse.py`
+- Modify: `src/service/routes/chat.py`
+
+- [ ] **Step 1: 修改 `src/service/__init__.py` — 使用新的主图**
+
+将 `from src.graph import _build_graph` 改为 `from src.graph_chat import _build_chat_graph`。
+
+将 `app.state.agent = _build_graph(checkpointer)` 改为 `app.state.agent = _build_chat_graph(checkpointer)`。
+
+- [ ] **Step 2: 修改 `src/service/routes/sse.py` — 区分 chat/research 事件**
+
+```python
+# src/service/routes/sse.py
+import asyncio
+import json
+from typing import Any
+from asyncio import Task
+
+from langgraph.graph.state import CompiledStateGraph
+from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from src.config_chat import ChatState
+
+type AgentType = CompiledStateGraph[ChatState, None, ChatState, ChatState]
+
+async def event_generator(
+    agent: AgentType,
+    initial_state: Any,
+    session_id: str,
+    engine: AsyncEngine,
+    sessions: dict,
+    create_message_fn,
+):
+    task = asyncio.current_task()
+    sessions[session_id] = task
+    config = {"configurable": {"thread_id": session_id}}
+    try:
+        async for mode, state in agent.astream(
+            initial_state, config, stream_mode=["updates", "custom"]
+        ):
+            state["session_id"] = session_id
+
+            if mode == "custom":
+                source = state.get("source")
+
+                if source == "research":
+                    event_type = state.get("type")
+                    if event_type == "node_update":
+                        node = state.get("node")
+                        node_state = state.get("state", {})
+                        async with AsyncSession(engine) as db:
+                            await create_message_fn(
+                                session=db,
+                                thread_id=session_id,
+                                role="AI",
+                                node_name=node,
+                                content="",
+                                state=node_state,
+                            )
+                            await db.commit()
+                    elif event_type == "research_start":
+                        pass
+                    elif event_type == "research_end":
+                        pass
+                    else:
+                        pass
+                    yield f"data: {json.dumps(state)}\n\n"
+                else:
+                    if "stream_chunk" in state:
+                        yield f"data: {json.dumps(state)}\n\n"
+                    continue
+
+            elif mode == "updates":
+                if not state:
+                    continue
+                node = list(state.keys())[0]
+                if "messages" in state.get(node, {}):
+                    del state[node]["messages"]
+                async with AsyncSession(engine) as db:
+                    await create_message_fn(
+                        session=db,
+                        thread_id=session_id,
+                        role="AI",
+                        node_name=node,
+                        content="",
+                        state=state,
+                    )
+                    await db.commit()
+                yield f"data: {json.dumps(state)}\n\n"
+
+    except asyncio.CancelledError:
+        yield f"data: {json.dumps({'type': 'stopped', 'session_id': session_id})}\n\n"
+    except Exception as e:
+        yield f"data: {json.dumps({'type': 'error', 'session_id': session_id, 'error': str(e)})}\n\n"
+    finally:
+        sessions.pop(session_id, None)
+```
+
+- [ ] **Step 3: 修改 `src/service/routes/chat.py` — 适配新主图**
+
+主要改动：
+1. `ChatStart` 新增 `task_goal` 可选字段
+2. `chat_start` 使用 `ChatState` 的初始 state 而非 `AgentState`
+3. 移除 `chat_feedback` 路由（不再需要 human gate）
+4. 保留 `chat_stop` 路由
+
+`state` 构建改为：
+```python
+from src.config_chat import ChatState
+from langchain_core.messages import HumanMessage
+
+# 新会话
+chat_state: ChatState = {
+    "messages": [HumanMessage(content=body.query)],
+    "user_query": body.query,
+}
+
+# 已有会话（恢复历史）
+chat_state = recover_chat_state(messages_from_db)
+chat_state["messages"] = chat_state["messages"] + [HumanMessage(content=body.query)]
+```
+
+新增 `recover_chat_state` 函数（放在 `src/utils/agent.py` 中），从 DB 消息恢复为 `ChatState`：
+
+```python
+def recover_chat_state(messages: list[dict]) -> ChatState:
+    from langchain_core.messages import HumanMessage, AIMessage
+    state: ChatState = {"messages": []}
+    for message in messages:
+        if message.role == "human":
+            state["messages"].append(HumanMessage(content=message.content))
+        else:
+            state["messages"].append(AIMessage(content=message.content or ""))
+    return state
+```
+
+移除 `chat_feedback` 路由和 `ChatFeedback` model。
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/service/__init__.py src/service/routes/sse.py src/service/routes/chat.py src/utils/agent.py
+git commit -m "feat: adapt service layer for chat graph"
+```
+
+---
+
+### Task 7: 改造 main.py CLI 入口
+
+**Files:**
+- Modify: `src/main.py`
+
+- [ ] **Step 1: 适配新图结构**
+
+```python
+# src/main.py
+import asyncio
+import os
+
+from dotenv import load_dotenv
+from psycopg_pool import AsyncConnectionPool
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langchain_core.messages import HumanMessage
+
+from src.config_chat import ChatState
+from src.graph_chat import _build_chat_graph
+from src.utils.rich_print import enable_rich_print
+
+load_dotenv()
+enable_rich_print()
+
+async def main():
+    pool = AsyncConnectionPool(os.getenv("PGSQL_DB_URI"), min_size=1, max_size=3)
+    await pool.open()
+    checkpointer = AsyncPostgresSaver(pool)
+    await checkpointer.setup()
+    agent = _build_chat_graph(checkpointer)
+
+    initial_state: ChatState = {
+        "messages": [HumanMessage(content="帮我总结一下 LangGraph 的核心概念")],
+        "user_query": "帮我总结一下 LangGraph 的核心概念",
+    }
+
+    async for event in agent.astream(initial_state, stream_mode=["updates", "custom"]):
+        print(event)
+
+    await pool.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/main.py
+git commit -m "feat: adapt CLI entry for chat graph"
+```
+
+---
+
+### Task 8: 前端类型适配
+
+**Files:**
+- Modify: `frontend/src/types/agent.ts`
+
+- [ ] **Step 1: 更新 SSEEventData 类型**
+
+在 `SSEEventData` 中新增 chat 相关字段：
+
+```typescript
+export type SSEEventData = {
+  stream_chunk: { chunk: string; node_output_key: NodeKey | "chat" };
+  source?: "research" | "chat";
+  type?: "node_update" | "research_start" | "research_end";
+  node?: string;
+  state?: Record<string, unknown>;
+  result?: string;
+  supervisor?: { supervisor_reason: string; next: string };
+  search?: {
+    search_results: SearchResult[];
+    source_index: SourceIndexItem[];
+    trace: string[];
+  };
+  read?: {
+    read_notes: ReadNote[];
+    read_notes_summary: string;
+    evidence_items: EvidenceItem[];
+    trace: string[];
+  };
+  analyze?: {
+    analysis_result: AnalysisResult;
+    analysis_summary: string;
+    trace: string[];
+  };
+  tag?: { tags: Tags; trace: string[]; next: string };
+  knowledge?: { knowledge_summary: KnowledgeSummary; trace: string[] };
+  review?: { review_result: ReviewResult; trace: string[] };
+  finalize?: { final_answer: string; trace: string[] };
+  session_id?: string;
+};
+```
+
+关键改动：`node_output_key` 类型扩展为 `NodeKey | "chat"`，新增 `source`、`type`、`node`、`result`、`state` 可选字段。
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add frontend/src/types/agent.ts
+git commit -m "feat: update SSE event types for chat mode"
+```
+
+---
+
+### Task 9: 前端 useAgentChat 适配
+
+**Files:**
+- Modify: `frontend/src/hooks/useAgentChat.ts`
+
+- [ ] **Step 1: 改造 handleMessage**
+
+`handleMessage` 回调需要区分 chat 和 research 事件：
+
+1. `stream_chunk` 事件：如果 `node_output_key === "chat"`，作为 chat 消息逐字展示；否则走现有的 research 逻辑
+2. `source === "research"` 且 `type === "node_update"` 的事件：走现有 research 节点更新逻辑
+3. 移除 `human` 节点的处理逻辑
+4. 新增 `research_start` / `research_end` 事件处理
+
+核心改动点在 `handleMessage` 的 `stream_chunk` 分支：
+
+```typescript
+if (event.stream_chunk) {
+  const { chunk, node_output_key } = event.stream_chunk;
+  setActiveNode(node_output_key);
+  setMessages((prev) => {
+    const lastMsg = prev[prev.length - 1];
+    if (lastMsg && lastMsg.nodeName === node_output_key) {
+      const updatedMsg = { ...lastMsg, content: lastMsg.content + chunk };
+      return [...prev.slice(0, -1), updatedMsg];
+    } else {
+      return [...prev, {
+        id: uuid(),
+        role: "AI",
+        content: chunk,
+        timestamp: Date.now(),
+        nodeName: node_output_key,
+      }];
+    }
+  });
+  return;
+}
+```
+
+这段逻辑不需要改动，因为 `node_output_key` 现在可以是 `"chat"` 或 research 节点名，都会正确创建/追加消息。
+
+移除 `showFeedbackPanel` 相关逻辑（不再有 human gate）。
+
+移除 `submitFeedback` 方法。
+
+- [ ] **Step 2: 移除 FeedbackPanel 相关代码**
+
+在 return 对象中移除 `showFeedbackPanel` 和 `submitFeedback`。
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add frontend/src/hooks/useAgentChat.ts
+git commit -m "feat: adapt useAgentChat for chat/research event routing"
+```
+
+---
+
+### Task 10: 前端 MessageList 适配
+
+**Files:**
+- Modify: `frontend/src/components/MessageList.tsx`
+- Modify: `frontend/src/App.tsx`
+
+- [ ] **Step 1: MessageList — 支持 chat 消息展示**
+
+在 `NODE_LOADING_TEXT` 中新增 `chat` 项：
+```typescript
+const NODE_LOADING_TEXT: Record<string, string> = {
+  chat: "正在思考",
+  supervisor: "正在规划研究路径",
+  // ... 现有项保持不变
+};
+```
+
+在 `NODE_ICON` 中新增 `chat` 项：
+```typescript
+const NODE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  chat: Sparkles,
+  // ... 现有项保持不变
+};
+```
+
+StepCard 中的 `nodeLabel` 映射新增：
+```typescript
+chat: "对话",
+```
+
+`nodeName === "chat"` 的消息应该直接用 `MarkdownRenderer` 渲染（而非 StepCard 或 ResultCard）。现有的消息渲染逻辑中，如果 `msg.nodeName === "chat"` 且没有 `msg.state`，会走到最后的 `else` 分支（`glass-card` + `MarkdownRenderer`），这已经是正确的展示方式，不需要额外改动。
+
+- [ ] **Step 2: App.tsx — 移除 FeedbackPanel**
+
+移除 `FeedbackPanel` 的导入和渲染。移除 `chat.showFeedbackPanel` 条件渲染。
+
+```tsx
+// App.tsx
+import { useAgentChat } from "./hooks/useAgentChat";
+import SearchForm from "./components/SearchForm";
+import MessageList from "./components/MessageList";
+import SessionSidebar from "./components/SessionSidebar";
+
+export default function App() {
+  const chat = useAgentChat();
+
+  return (
+    <div className="h-screen bg-background flex">
+      <SessionSidebar
+        sessions={chat.sessions}
+        activeThreadId={chat.activeThreadId}
+        onSelect={chat.loadSession}
+        onNew={chat.startNewSession}
+        onDelete={chat.deleteSession}
+        collapsed={chat.sidebarCollapsed}
+        onToggle={chat.toggleSidebar}
+      />
+
+      <div className={`flex-1 flex flex-col min-w-0 h-screen main-area ${chat.sidebarCollapsed ? "sidebar-collapsed" : "sidebar-expanded"}`}>
+        <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 overflow-hidden" style={{ height: "calc(100vh)" }}>
+          <MessageList messages={chat.messages} loading={chat.loading} currentState={chat.currentState} activeNode={chat.activeNode} />
+          <div className="shrink-0 pb-4 pt-0 space-y-3">
+            <SearchForm onSubmit={chat.submit} onStop={chat.stop} loading={chat.loading} />
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add frontend/src/components/MessageList.tsx frontend/src/App.tsx
+git commit -m "feat: adapt frontend for chat message display"
+```
+
+---
+
+### Task 11: 集成测试
+
+**Files:**
+- 无新增文件
+
+- [ ] **Step 1: 启动后端服务，验证基本 chat 功能**
+
+Run: `cd /Users/hanyangjing/Desktop/self-space/research && python -m uvicorn src.service:app --port 4030 --reload`
+
+手动测试：
+1. 发送简单问题（如"你好"），验证直接回复，不触发 research
+2. 发送 `/research LangGraph 是什么`，验证触发 research 并展示中间过程
+3. 发送自然语言研究请求（如"帮我总结一下 React hooks"），验证 LLM 自主触发 research
+4. 多轮对话：先闲聊，再触发 research，再闲聊
+
+- [ ] **Step 2: 启动前端，验证 SSE 流式展示**
+
+Run: `cd /Users/hanyangjing/Desktop/self-space/research/frontend && npm run dev`
+
+验证：
+1. chat 消息逐字输出
+2. research 中间步骤加载动画正常展示
+3. research finalize 结果正常展示
+4. 会话列表正常更新
+5. 历史消息恢复正常
+
+- [ ] **Step 3: Commit 集成修复（如有）**
+
+```bash
+git add -A
+git commit -m "fix: integration fixes for chat + research agent"
+```
