@@ -73,6 +73,7 @@ git commit -m "feat: add ChatState definition for main graph"
 - Modify: `src/nodes/__init__.py`
 - Modify: `src/nodes/reviewer.py`
 - Modify: `src/nodes/supervisor.py`
+- Modify: `src/config.py`
 
 - [ ] **Step 1: 修改 `src/nodes/reviewer.py` — 移除 need_human**
 
@@ -106,7 +107,9 @@ git commit -m "feat: add ChatState definition for main graph"
 
 移除 `"need_human_reason"` 字段。
 
-将 `src/config.py` 中的 `ReviewStatus` 类型：
+- [ ] **Step 2: 修改 `src/config.py` — ReviewStatus 和 NextStep 类型**
+
+将 `ReviewStatus` 类型：
 ```python
 ReviewStatus = Literal[
     "pass",
@@ -122,22 +125,22 @@ ReviewStatus = Literal[
 ]
 ```
 
-- [ ] **Step 2: 修改 `src/nodes/supervisor.py` — 移除 human 相关规则**
+将 `NextStep` 类型中移除 `"human"` 选项。
+
+- [ ] **Step 3: 修改 `src/nodes/supervisor.py` — 移除 human 相关规则**
 
 在 `supervisor_prompt` 中：
 1. 移除 `最近人工反馈：` 占位符和 `{human_feedback}` 变量
 2. 从 `next` 选项列表中移除 `human`
-3. 移除所有引用 `human_feedback` 的规则（规则 0, 1, 2, 13, 15, 16）
-4. 移除规则 2（最大迭代次数限制时选 human）——改为选 finalize 并附带警告
+3. 移除所有引用 `human_feedback` 的规则
+4. 最大迭代次数限制时改为选 `finalize` 并附带警告（而非 `human`）
 5. 重新编号剩余规则
 
 将 `supervisor_input` 函数中移除 `human_feedback` 字段。
 
-将 `_validate_supervisor_result` 函数中移除 `human_approved` 相关逻辑（`human_feedback` 判断分支）。
+将 `_validate_supervisor_result` 函数中移除 `human_approved` 相关逻辑。
 
-将 `NextStep` 类型（`src/config.py`）中移除 `"human"` 和 `"supervisor"`（supervisor 作为内部节点不需要在 NextStep 中）。
-
-- [ ] **Step 3: 修改 `src/nodes/__init__.py` — 移除 human_gate 导出**
+- [ ] **Step 4: 修改 `src/nodes/__init__.py` — 移除 human_gate 导出**
 
 ```python
 # src/nodes/__init__.py
@@ -151,7 +154,7 @@ from src.nodes.reviewer import reviewer_node, route_review_node
 from src.nodes.finalize import finalize_node
 ```
 
-- [ ] **Step 4: 修改 `src/graph.py` — 导出 research subgraph 构建函数**
+- [ ] **Step 5: 修改 `src/graph.py` — 导出 research subgraph 构建函数**
 
 ```python
 # src/graph.py
@@ -243,7 +246,7 @@ def _build_graph(checkpointer: AsyncPostgresSaver):
 
 注意：`_build_research_graph()` 不传 checkpointer，作为 tool 内部使用的轻量子图。`_build_graph()` 保持原有签名，用于兼容旧的 CLI 调试入口。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/graph.py src/nodes/__init__.py src/nodes/reviewer.py src/nodes/supervisor.py src/config.py
@@ -317,12 +320,13 @@ git commit -m "feat: add research tool with stream forwarding"
 
 - [ ] **Step 1: 创建 chat 节点**
 
+核心设计：tool calling 阶段用 `ainvoke`（需要完整 `tool_calls`），最终文本回复阶段用 `llm.astream()` 流式输出。
+
 ```python
 # src/nodes/chat.py
 import os
 
-from langchain_classic.prompts import ChatPromptTemplate
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import SystemMessage, ToolMessage
 from langgraph.graph.ui import get_stream_writer
 
 from src.config_chat import ChatState
@@ -363,11 +367,12 @@ async def chat_node(state: ChatState) -> dict:
 
     messages = [SystemMessage(content=CHAT_SYSTEM_PROMPT)] + state.get("messages", [])
 
+    # Phase 1: tool calling 阶段 — 用 ainvoke（需要完整 tool_calls）
     response = await llm_with_tools.ainvoke(messages)
 
     while response.tool_calls:
+        messages.append(response)
         for tool_call in response.tool_calls:
-            messages.append(response)
             if tool_call["name"] == "research":
                 writer({"source": "research", "type": "research_start"})
                 result = await research.ainvoke(tool_call["args"])
@@ -377,18 +382,30 @@ async def chat_node(state: ChatState) -> dict:
 
         response = await llm_with_tools.ainvoke(messages)
 
-    writer({"stream_chunk": {"chunk": response.content, "node_output_key": "chat"}})
+    # tool calling 结束后，response 是最终文本回复
+    # 把 assistant response 加入 messages
+    messages.append(response)
 
-    return {
-        "messages": messages + [response],
-    }
+    # Phase 2: 最终文本回复 — 用不带 tools 的 llm.astream 流式输出
+    # 重新用 astream 生成最终回复，逐字推送给前端
+    stream_messages = messages[:-1]  # 去掉 ainvoke 的结果
+    async for chunk in llm.astream(stream_messages):
+        if chunk.content:
+            writer({"stream_chunk": {"chunk": chunk.content, "node_output_key": "chat"}})
+
+    return {"messages": messages}
 ```
+
+**说明：**
+- Phase 1（tool calling）：用 `ainvoke`，因为需要拿到完整的 `tool_calls` 列表才能逐个执行 research。这个阶段 LLM 不会输出可见文本，只有 tool call 决策。
+- Phase 2（最终回复）：tool 执行完毕后，LLM 基于工具结果生成最终文本。用不带 tools 的 `llm.astream()` 逐字流式输出，前端能看到打字效果。
+- 注意：Phase 2 实际上是重新调用了一次 LLM，和 Phase 1 最后的 `ainvoke` 有重复。如果 LLM 足够稳定，两次输出内容一致。如果担心不一致，可以改为只做 Phase 1 的 `ainvoke`，然后手动把 `response.content` 切分成 chunk 通过 writer 推送（模拟流式效果）。但真正的 astream 流式更自然。
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add src/nodes/chat.py
-git commit -m "feat: add chat node with research tool binding"
+git commit -m "feat: add chat node with streaming output"
 ```
 
 ---
@@ -433,6 +450,7 @@ git commit -m "feat: add main chat graph builder"
 - Modify: `src/service/__init__.py`
 - Modify: `src/service/routes/sse.py`
 - Modify: `src/service/routes/chat.py`
+- Modify: `src/utils/agent.py`
 
 - [ ] **Step 1: 修改 `src/service/__init__.py` — 使用新的主图**
 
@@ -492,12 +510,6 @@ async def event_generator(
                                 state=node_state,
                             )
                             await db.commit()
-                    elif event_type == "research_start":
-                        pass
-                    elif event_type == "research_end":
-                        pass
-                    else:
-                        pass
                     yield f"data: {json.dumps(state)}\n\n"
                 else:
                     if "stream_chunk" in state:
@@ -530,7 +542,22 @@ async def event_generator(
         sessions.pop(session_id, None)
 ```
 
-- [ ] **Step 3: 修改 `src/service/routes/chat.py` — 适配新主图**
+- [ ] **Step 3: 修改 `src/utils/agent.py` — 新增 recover_chat_state**
+
+```python
+def recover_chat_state(messages: list) -> "ChatState":
+    from langchain_core.messages import HumanMessage, AIMessage
+    from src.config_chat import ChatState
+    state: ChatState = {"messages": []}
+    for message in messages:
+        if message.role == "human":
+            state["messages"].append(HumanMessage(content=message.content))
+        else:
+            state["messages"].append(AIMessage(content=message.content or ""))
+    return state
+```
+
+- [ ] **Step 4: 修改 `src/service/routes/chat.py` — 适配新主图**
 
 主要改动：
 1. `ChatStart` 新增 `task_goal` 可选字段
@@ -554,23 +581,9 @@ chat_state = recover_chat_state(messages_from_db)
 chat_state["messages"] = chat_state["messages"] + [HumanMessage(content=body.query)]
 ```
 
-新增 `recover_chat_state` 函数（放在 `src/utils/agent.py` 中），从 DB 消息恢复为 `ChatState`：
-
-```python
-def recover_chat_state(messages: list[dict]) -> ChatState:
-    from langchain_core.messages import HumanMessage, AIMessage
-    state: ChatState = {"messages": []}
-    for message in messages:
-        if message.role == "human":
-            state["messages"].append(HumanMessage(content=message.content))
-        else:
-            state["messages"].append(AIMessage(content=message.content or ""))
-    return state
-```
-
 移除 `chat_feedback` 路由和 `ChatFeedback` model。
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add src/service/__init__.py src/service/routes/sse.py src/service/routes/chat.py src/utils/agent.py
@@ -695,12 +708,12 @@ git commit -m "feat: update SSE event types for chat mode"
 
 `handleMessage` 回调需要区分 chat 和 research 事件：
 
-1. `stream_chunk` 事件：如果 `node_output_key === "chat"`，作为 chat 消息逐字展示；否则走现有的 research 逻辑
+1. `stream_chunk` 事件：`node_output_key` 可以是 `"chat"` 或 research 节点名，现有逻辑已能正确处理（创建/追加消息）
 2. `source === "research"` 且 `type === "node_update"` 的事件：走现有 research 节点更新逻辑
 3. 移除 `human` 节点的处理逻辑
 4. 新增 `research_start` / `research_end` 事件处理
 
-核心改动点在 `handleMessage` 的 `stream_chunk` 分支：
+`stream_chunk` 分支不需要改动，因为 `node_output_key` 现在可以是 `"chat"` 或 research 节点名，都会正确创建/追加消息：
 
 ```typescript
 if (event.stream_chunk) {
@@ -725,11 +738,7 @@ if (event.stream_chunk) {
 }
 ```
 
-这段逻辑不需要改动，因为 `node_output_key` 现在可以是 `"chat"` 或 research 节点名，都会正确创建/追加消息。
-
-移除 `showFeedbackPanel` 相关逻辑（不再有 human gate）。
-
-移除 `submitFeedback` 方法。
+移除 `showFeedbackPanel` 相关逻辑和 `submitFeedback` 方法。
 
 - [ ] **Step 2: 移除 FeedbackPanel 相关代码**
 
