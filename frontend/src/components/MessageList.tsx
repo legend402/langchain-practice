@@ -25,6 +25,7 @@ interface MessageListProps {
 }
 
 const NODE_LOADING_TEXT: Record<string, string> = {
+  chat: "正在思考",
   supervisor: "正在规划研究路径",
   search: "正在获取相关资料",
   read: "正在阅读并提取内容",
@@ -32,11 +33,11 @@ const NODE_LOADING_TEXT: Record<string, string> = {
   tag: "正在提取标签和关键词",
   knowledge: "正在生成知识总结",
   review: "正在审核内容质量",
-  human: "等待人工审核",
   finalize: "正在生成最终回答",
 };
 
 const NODE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  chat: Sparkles,
   search: Search,
   read: BookOpen,
   analyze: FlaskConical,
@@ -57,7 +58,7 @@ function StepCard({
 }) {
   const Icon = msg.nodeName ? NODE_ICON[msg.nodeName] ?? Bot : Bot;
   const nodeLabel = msg.nodeName
-    ? { supervisor: "规划", search: "搜索", read: "阅读", analyze: "分析", tag: "标签", knowledge: "总结", review: "审核", human: "人工审核" }[msg.nodeName] ?? msg.nodeName
+    ? { supervisor: "规划", search: "搜索", read: "阅读", analyze: "分析", tag: "标签", knowledge: "总结", review: "审核", chat: "对话" }[msg.nodeName] ?? msg.nodeName
     : "";
 
   return (
@@ -95,7 +96,7 @@ function StepCard({
   );
 }
 
-export default function MessageList({ messages, loading, currentState, activeNode }: MessageListProps) {
+export default function MessageList({ messages, loading, activeNode }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -106,7 +107,7 @@ export default function MessageList({ messages, loading, currentState, activeNod
   useEffect(() => {
     if (messages.length === 0) return;
     const last = messages[messages.length - 1];
-    if (last.role === "AI" && last.nodeName && last.nodeName !== "finalize" && last.state) {
+    if (last.role === "ai" && last.nodeName && last.nodeName !== "finalize" && last.state) {
       setExpandedId(last.id);
     }
   }, [messages]);
@@ -133,17 +134,16 @@ export default function MessageList({ messages, loading, currentState, activeNod
           key={msg.id}
           className={`flex gap-3 ${msg.role === "human" ? "justify-end" : ""}`}
         >
-          {msg.role === "AI" && (
+          {msg.role === "ai" && (
             <div className="flex-shrink-0 w-7 h-7 rounded-full bg-accent flex items-center justify-center mt-0.5">
               <Bot className="w-4 h-4 text-white" />
             </div>
           )}
           <div
-            className={`max-w-[80%] min-w-0 ${
-              msg.role === "human"
+            className={`max-w-[80%] min-w-0 ${msg.role === "human"
                 ? "glass-card px-4 py-2.5"
                 : "w-full"
-            }`}
+              }`}
           >
             {msg.role === "human" ? (
               <p className="text-sm text-ink-100 whitespace-pre-wrap break-words">

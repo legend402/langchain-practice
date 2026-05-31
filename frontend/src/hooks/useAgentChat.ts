@@ -3,7 +3,6 @@ import type {
   AgentState,
   ChatMessage,
   ChatSession,
-  HumanFeedback,
   SSEEventData,
   NodeKey,
 } from "../types/agent";
@@ -22,8 +21,8 @@ const NODE_LABELS: Record<string, string> = {
   tag: "标签",
   knowledge: "总结",
   review: "审核",
-  human: "人工审核",
   finalize: "完成",
+  chat: "对话",
 };
 
 function getNodeSummary(nodeKey: NodeKey, data: NonNullable<SSEEventData[NodeKey]>): string {
@@ -42,8 +41,6 @@ function getNodeSummary(nodeKey: NodeKey, data: NonNullable<SSEEventData[NodeKey
       const r = (data as { review_result: { status: string } }).review_result;
       return r?.status === "pass"
         ? "审核通过"
-        : r?.status === "need_human"
-        ? "需要人工审核"
         : "审核建议修改，将重新规划";
     }
     case "finalize":
@@ -103,12 +100,6 @@ function accumulateState(
       next.review_result = d.review_result;
       break;
     }
-    case "human": {
-      const d = event.human!;
-      next.human_message = d.human_message;
-      next.next = "human";
-      break;
-    }
     case "finalize": {
       const d = event.finalize!;
       next.final_answer = d.final_answer;
@@ -140,7 +131,7 @@ export function useAgentChat() {
     try {
       const list = await agentApi.getSessions();
       setSessions(list);
-    } catch {}
+    } catch { }
   }, []);
 
   useEffect(() => {
@@ -161,7 +152,7 @@ export function useAgentChat() {
       } else {
         setCurrentState(null);
       }
-    } catch {}
+    } catch { }
   }, [activeThreadId]);
 
   const startNewSession = useCallback(() => {
@@ -179,7 +170,7 @@ export function useAgentChat() {
       if (activeThreadId === threadId) {
         startNewSession();
       }
-    } catch {}
+    } catch { }
   }, [activeThreadId, startNewSession]);
 
   const handleMessage = useCallback((event: SSEEventData) => {
@@ -188,7 +179,7 @@ export function useAgentChat() {
       setActiveNode("");
       addMessage({
         id: uuid(),
-        role: "AI",
+        role: "ai",
         content: "已停止生成",
         timestamp: Date.now(),
       });
@@ -198,7 +189,7 @@ export function useAgentChat() {
       setLoading(false);
       addMessage({
         id: uuid(),
-        role: "AI",
+        role: "ai",
         content: `处理出错: ${(event as Record<string, unknown>).error}`,
         timestamp: Date.now(),
       });
@@ -206,6 +197,9 @@ export function useAgentChat() {
     }
     if (event.stream_chunk) {
       const { chunk, node_output_key } = event.stream_chunk;
+
+      if (node_output_key === "tools") return;
+
       setActiveNode(node_output_key);
       setMessages((prev) => {
         const lastMsg = prev[prev.length - 1];
@@ -213,11 +207,51 @@ export function useAgentChat() {
           const updatedMsg = { ...lastMsg, content: lastMsg.content + chunk };
           return [...prev.slice(0, -1), updatedMsg];
         } else {
-          return [...prev, { id: uuid(), role: "AI", content: chunk, timestamp: Date.now(), nodeName: node_output_key }];
+          return [...prev, { id: uuid(), role: "ai", content: chunk, timestamp: Date.now(), nodeName: node_output_key }];
         }
       });
       return;
     }
+    if (event.source === "research" && event.type === "node_update") {
+      const nodeKey = event.node as string;
+      const nodeState = event.state as Record<string, unknown>;
+      if (!nodeKey || !nodeState) return;
+
+      const flatEvent = { ...nodeState, session_id: event.session_id };
+      const nodeData = flatEvent[nodeKey];
+
+      stateRef.current = accumulateState(stateRef.current, flatEvent, nodeKey);
+      setCurrentState({ ...stateRef.current });
+
+      if (nodeKey === "supervisor") {
+        const nextNode = (nodeData as { next: string })?.next;
+        if (nextNode) setActiveNode(nextNode);
+        return;
+      }
+      setActiveNode(nodeKey);
+      if (nodeKey === "finalize") {
+        setMessages((prev) => {
+          const lastMsg = prev[prev.length - 1];
+          if (lastMsg && lastMsg.nodeName === "finalize") {
+            return [...prev.slice(0, -1), { ...lastMsg, state: { ...stateRef.current } }];
+          }
+          return prev;
+        });
+        return;
+      }
+
+      const agentMsg: ChatMessage = {
+        id: uuid(),
+        role: "ai",
+        content: getNodeSummary(nodeKey, nodeData),
+        state: { ...stateRef.current },
+        nodeName: nodeKey,
+        timestamp: Date.now(),
+      };
+      addMessage(agentMsg);
+      return;
+    }
+
     const nodeKey = getNodeKey(event);
     if (!nodeKey) return;
 
@@ -228,7 +262,7 @@ export function useAgentChat() {
     if (nodeKey === "supervisor") {
       const nextNode = (nodeData as { next: string })?.next;
       if (nextNode) {
-        setActiveNode(nextNode);    // 用 supervisor 决策的下一步预设 loading
+        setActiveNode(nextNode);
       }
       return;
     }
@@ -244,13 +278,10 @@ export function useAgentChat() {
       return;
     }
 
-    const isFinalize = nodeKey === "finalize";
     const agentMsg: ChatMessage = {
       id: uuid(),
-      role: "AI",
-      content: isFinalize
-        ? (nodeData as { final_answer: string }).final_answer
-        : getNodeSummary(nodeKey, nodeData),
+      role: "ai",
+      content: getNodeSummary(nodeKey, nodeData),
       state: { ...stateRef.current },
       nodeName: nodeKey,
       timestamp: Date.now(),
@@ -274,7 +305,7 @@ export function useAgentChat() {
 
       try {
         let sessionRefreshed = false;
-        await agentApi.submitSSETask({ query, thread_id: activeThreadId }, {
+        await agentApi.submitSSETask({ query, thread_id: activeThreadId ?? undefined }, {
           onMessage: (event: SSEEventData) => {
             handleMessage(event);
 
@@ -287,18 +318,18 @@ export function useAgentChat() {
           onError: (err: Error) => {
             const errMsg: ChatMessage = {
               id: uuid(),
-              role: "AI",
+              role: "ai",
               content: `处理出错: ${err.message}`,
               timestamp: Date.now(),
             };
             addMessage(errMsg);
           },
-          onClose: () => {},
+          onClose: () => { },
         });
       } catch (err) {
         const errMsg: ChatMessage = {
           id: uuid(),
-            role: "AI",
+          role: "ai",
           content: `请求失败: ${err instanceof Error ? err.message : "未知错误"}`,
           timestamp: Date.now(),
         };
@@ -310,66 +341,14 @@ export function useAgentChat() {
     [activeThreadId, addMessage, handleMessage, refreshSessions],
   );
 
-  const submitFeedback = useCallback(
-    async (feedback: HumanFeedback) => {
-      if (!currentState) return;
-      setLoading(true);
-
-      const feedbackMsg: ChatMessage = {
-        id: uuid(),
-        role: "human",
-        content: `[${feedback.decision}] ${feedback.comment}`,
-        timestamp: Date.now(),
-      };
-      addMessage(feedbackMsg);
-
-      try {
-        await agentApi.submitFeedback(
-          currentState.session_id,
-          feedback,
-          {
-            onMessage: (event: SSEEventData) => {
-              handleMessage(event);
-            },
-            onError: (err: Error) => {
-              const errMsg: ChatMessage = {
-                id: uuid(),
-                role: "AI",
-                content: `处理出错: ${err.message}`,
-                timestamp: Date.now(),
-              };
-              addMessage(errMsg);
-            },
-            onClose: () => {},
-          }
-        );
-      } catch (err) {
-        const errMsg: ChatMessage = {
-          id: uuid(),
-            role: "AI",
-          content: `反馈提交失败: ${err instanceof Error ? err.message : "未知错误"}`,
-          timestamp: Date.now(),
-        };
-        addMessage(errMsg);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [currentState, addMessage, handleMessage],
-  );
-
   const stop = useCallback(async () => {
     if (!activeThreadId) return;
     try {
       await agentApi.stopChat(activeThreadId);
-    } catch {}
+    } catch { }
     setLoading(false);
     setActiveNode("");
   }, [activeThreadId]);
-
-  const showFeedbackPanel =
-    currentState?.next === "human" ||
-    currentState?.review_result?.status === "need_human";
 
   const showResultCard = !!currentState?.final_answer;
 
@@ -379,9 +358,7 @@ export function useAgentChat() {
     loading,
     activeNode,
     submit,
-    submitFeedback,
     stop,
-    showFeedbackPanel,
     showResultCard,
     sessions,
     activeThreadId,

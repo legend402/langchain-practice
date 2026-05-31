@@ -59,8 +59,6 @@ export default function WorkflowStepper({ state }: WorkflowStepperProps) {
   }
 
   const activeReviewBranch = state.review_result?.status ?? null;
-  const activeHumanBranch = state.human_feedback?.decision ?? null;
-  const showHumanGate = activeReviewBranch === "need_human" || currentNode === "human";
 
   return (
     <div className="glass-card p-4 mb-4">
@@ -107,23 +105,14 @@ export default function WorkflowStepper({ state }: WorkflowStepperProps) {
         })}
       </div>
 
-      {(activeReviewBranch || showHumanGate) && (
+      {activeReviewBranch && (
         <div className="mt-3 pt-3 border-t border-gray-200/60 flex items-center gap-3 text-xs">
           <span className="text-ink-400">审核分支:</span>
-          {activeReviewBranch && (
-            <span className="px-2.5 py-0.5 rounded-full bg-accent-bg text-accent font-medium">
-              {activeReviewBranch === "pass"
-                ? "通过 → 完成"
-                : activeReviewBranch === "replan"
-                ? "↩ 重规划"
-                : "人工审核"}
-            </span>
-          )}
-          {showHumanGate && activeHumanBranch && (
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-warning-text font-medium">
-              {activeHumanBranch === "approved" ? "通过 → 完成" : "↩ 修改"}
-            </span>
-          )}
+          <span className="px-2.5 py-0.5 rounded-full bg-accent-bg text-accent font-medium">
+            {activeReviewBranch === "pass"
+              ? "通过 → 完成"
+              : "↩ 重规划"}
+          </span>
         </div>
       )}
 

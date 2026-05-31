@@ -81,18 +81,11 @@ export interface KnowledgeSummary {
 }
 
 export interface ReviewResult {
-  status: "pass" | "replan" | "need_human";
+  status: "pass" | "replan";
   issues: string[];
   suggestions: string[];
   next_action_hint: string | null;
-  need_human_reason: string | null;
   confidence: number;
-}
-
-export interface HumanFeedback {
-  decision: "approved" | "revise" | "extra_input";
-  comment: string;
-  additional_material?: string;
 }
 
 export interface AgentState {
@@ -114,9 +107,6 @@ export interface AgentState {
   knowledge_summary: KnowledgeSummary | null;
 
   review_result: ReviewResult | null;
-  human_feedback: HumanFeedback | null;
-
-  human_message: string | null;
 
   final_answer: string;
   errors: string[];
@@ -135,7 +125,7 @@ export interface ChatSession {
 
 export interface ChatMessage {
   id: string;
-  role: "human" | "AI";
+  role: "human" | "ai";
   content: string;
   state?: AgentState;
   nodeName?: string;
@@ -161,7 +151,12 @@ export interface ResponseResult<T = void> {
 }
 
 export type SSEEventData = {
-  stream_chunk: { chunk: string; node_output_key: NodeKey };
+  stream_chunk: { chunk: string; node_output_key: NodeKey | "chat" | "tools" };
+  source?: "research" | "chat";
+  type?: "node_update" | "research_start" | "research_end";
+  node?: string;
+  state?: Record<string, unknown>;
+  result?: string;
   supervisor?: { supervisor_reason: string; next: string };
   search?: {
     search_results: SearchResult[];
@@ -182,11 +177,6 @@ export type SSEEventData = {
   tag?: { tags: Tags; trace: string[]; next: string };
   knowledge?: { knowledge_summary: KnowledgeSummary; trace: string[] };
   review?: { review_result: ReviewResult; trace: string[] };
-  human?: {
-    human_message: string;
-    expected_reply_schema: Record<string, unknown>;
-    trace: string[];
-  };
   finalize?: { final_answer: string; trace: string[] };
   session_id?: string;
 };
@@ -205,7 +195,6 @@ const NODE_KEYS = [
   "tag",
   "knowledge",
   "review",
-  "human",
   "finalize",
 ] as const;
 
@@ -230,8 +219,6 @@ export function createInitialState(): AgentState {
     tags: null,
     knowledge_summary: null,
     review_result: null,
-    human_feedback: null,
-    human_message: null,
     final_answer: "",
     errors: [],
   };

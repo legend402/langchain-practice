@@ -243,15 +243,11 @@ export default function StateCard({ state, nodeName }: StateCardProps) {
                 className={
                   state.review_result.status === "pass"
                     ? "text-success"
-                    : state.review_result.status === "need_human"
-                    ? "text-warning-text"
                     : "text-accent"
                 }
               >
                 {state.review_result.status === "pass"
                   ? "通过"
-                  : state.review_result.status === "need_human"
-                  ? "需要人工审核"
                   : "建议修改"}
               </span>
             </div>

@@ -1,5 +1,4 @@
 import type {
-  HumanFeedback,
   SubmitRequest,
   SSEEventData,
   SSEEventHandler,
@@ -19,11 +18,6 @@ export interface AgentApi {
     request: SubmitRequest,
     events: SSEEventHandler,
   ) => Promise<void>;
-  submitFeedback: (
-    sessionId: string,
-    feedback: HumanFeedback,
-    events: SSEEventHandler,
-  ) => Promise<void>;
   stopChat: (sessionId: string) => Promise<ResponseResult>;
   dispatchEvent: (events: SSEEventHandler, response: Response) => Promise<void>;
   getSessions: () => Promise<ChatSession[]>;
@@ -33,7 +27,7 @@ export interface AgentApi {
 
 const NODE_KEYS = [
   "supervisor", "search", "read", "analyze", "tag",
-  "knowledge", "review", "human", "finalize",
+  "knowledge", "review", "finalize",
 ] as const;
 
 function extractNodeName(state: Record<string, unknown> | AgentState | null): string | null {
@@ -88,17 +82,18 @@ function parseMessages(rows: ChatMessageFromDB[]): ChatMessage[] {
       return nodeName !== "supervisor";
     })
     .map((r) => {
-      const role: "human" | "AI" = (r.role === "user" || r.role === "human") ? "human" : "AI";
+      const role: "human" | "ai" = (r.role === "user" || r.role === "human") ? "human" : "ai";
       const nodeName = (r.node_name || extractNodeName(r.state)) as NodeKey | null;
-      const flatState = flattenState(r.state, nodeName);
+      const effectiveNodeName = nodeName === "chat" ? null : nodeName;
+      const flatState = flattenState(r.state, effectiveNodeName);
 
       let content = r.content ?? "";
-      if (!content && nodeName && r.state) {
+      if (!content && effectiveNodeName && r.state) {
         const state = r.state as Record<string, unknown>;
-        const nodeData = state[nodeName] as Record<string, unknown>;
-        content = nodeName === "finalize"
+        const nodeData = state[effectiveNodeName] as Record<string, unknown>;
+        content = effectiveNodeName === "finalize"
           ? (nodeData?.final_answer as string) ?? ""
-          : nodeData ? getNodeSummary(nodeName, nodeData) : "";
+          : nodeData ? getNodeSummary(effectiveNodeName, nodeData) : "";
       }
 
       return {
@@ -106,7 +101,7 @@ function parseMessages(rows: ChatMessageFromDB[]): ChatMessage[] {
         role,
         content,
         state: flatState,
-        nodeName: nodeName ?? undefined,
+        nodeName: effectiveNodeName ?? undefined,
         timestamp: new Date(r.create_at).getTime(),
       };
     });
@@ -126,23 +121,7 @@ const realApi: AgentApi = {
       body: JSON.stringify(request),
       signal: agentApi.abort.signal,
     });
-    
-    await agentApi.dispatchEvent(events, response);
-  },
 
-  async submitFeedback(
-    sessionId: string,
-    feedback: HumanFeedback,
-    events: SSEEventHandler,
-  ): Promise<void> {
-    agentApi.abort.abort();
-    agentApi.abort = new AbortController();
-    const response = await fetch(`${API_BASE}/chat/${sessionId}/feedback`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(feedback),
-      signal: agentApi.abort.signal,
-    });
     await agentApi.dispatchEvent(events, response);
   },
   async dispatchEvent(events: SSEEventHandler, response: Response) {

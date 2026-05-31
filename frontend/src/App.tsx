@@ -2,7 +2,6 @@ import { useAgentChat } from "./hooks/useAgentChat";
 
 import SearchForm from "./components/SearchForm";
 import MessageList from "./components/MessageList";
-import FeedbackPanel from "./components/FeedbackPanel";
 import SessionSidebar from "./components/SessionSidebar";
 
 export default function App() {
@@ -24,13 +23,6 @@ export default function App() {
         <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 overflow-hidden" style={{ height: "calc(100vh)" }}>
           <MessageList messages={chat.messages} loading={chat.loading} currentState={chat.currentState} activeNode={chat.activeNode} />
           <div className="shrink-0 pb-4 pt-0 space-y-3">
-            {chat.showFeedbackPanel && chat.currentState && (
-              <FeedbackPanel
-                state={chat.currentState}
-                onSubmit={chat.submitFeedback}
-                disabled={chat.loading}
-              />
-            )}
             <SearchForm onSubmit={chat.submit} onStop={chat.stop} loading={chat.loading} />
           </div>
         </main>
