@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select, delete
 
+from src.agent.chat.config import recover_chat_state
 from src.service.controller.ChatMessage import create_message, get_messages
 from src.service.controller.ChatSession import create_session
 from src.service.db.database import get_session, engine
@@ -18,14 +19,17 @@ from src.utils.agent import get_initial_state, recover_state
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
+
 class ChatStart(BaseModel):
     query: str
     thread_id: Optional[str] = None
+
 
 class ChatFeedback(BaseModel):
     decision: str
     comment: str
     additional_material: str | None = None
+
 
 @router.get("/sessions")
 async def chat_sessions(session: AsyncSession = Depends(get_session)):
@@ -33,6 +37,7 @@ async def chat_sessions(session: AsyncSession = Depends(get_session)):
         select(ChatSession).order_by(ChatSession.create_at.desc())
     )
     return Result.success(result.all())
+
 
 @router.delete("/{id}")
 async def delete_sessions(id: str, session: AsyncSession = Depends(get_session)):
@@ -44,10 +49,12 @@ async def delete_sessions(id: str, session: AsyncSession = Depends(get_session))
     await session.commit()
     return Result.success(message="删除成功")
 
+
 @router.get("/{thread_id}/messages")
 async def chat_messages(thread_id: str, session: AsyncSession = Depends(get_session)):
     list_ = await get_messages(session, thread_id)
     return Result.success(list_)
+
 
 @router.post("/start")
 async def chat_start(body: ChatStart, session: AsyncSession = Depends(get_session)):
@@ -60,11 +67,13 @@ async def chat_start(body: ChatStart, session: AsyncSession = Depends(get_sessio
     state = {"user_query": body.query}
     # 如果没有会话记录，就创建新的记录
     if body.thread_id is None:
-        await create_session(session=session, thread_id=thread_id, title=body.query[:50])
+        await create_session(
+            session=session, thread_id=thread_id, title=body.query[:50]
+        )
     # 如果存在记录，就获取完整的记录，然后重新把记录传回get_initial_state，恢复上下文
     elif session.get(ChatSession, thread_id):
         messages = await get_messages(session, thread_id)
-        state = recover_state(messages)
+        state = recover_chat_state(messages)
         state["messages"] = state["messages"] + [("human", body.query)]
 
     await create_message(
@@ -86,6 +95,7 @@ async def chat_start(body: ChatStart, session: AsyncSession = Depends(get_sessio
         media_type="text/events-stream",
     )
 
+
 @router.post("/{thread_id}/stop")
 async def chat_stop(thread_id: str):
     from src.service import get_app
@@ -96,6 +106,7 @@ async def chat_stop(thread_id: str):
         task.cancel()
         return Result.success(message="已停止")
     return Result.success(message="未找到正在运行中的任务")
+
 
 @router.post("/{session_id}/feedback")
 async def chat_feedback(session_id: str, body: ChatFeedback):

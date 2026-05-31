@@ -3,6 +3,7 @@ import json
 from typing import Any
 from asyncio import Task
 
+from langchain.messages import AIMessageChunk
 from langgraph.graph.state import CompiledStateGraph
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -10,6 +11,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from src.config import AgentState
 
 type AgentType = CompiledStateGraph[AgentState, None, AgentState, AgentState]
+
 
 async def event_generator(
     agent: AgentType,
@@ -24,11 +26,37 @@ async def event_generator(
     config = {"configurable": {"thread_id": session_id}}
     try:
         async for mode, state in agent.astream(
-            initial_state, config, stream_mode=["updates", "custom"]
+            initial_state, config, stream_mode=["updates", "custom", "messages"]
         ):
+            if mode == "messages":
+                token, metadata = state
+                if isinstance(token, AIMessageChunk) and token.content:
+                    node = metadata.get("langgraph_node", "chat")
+                    event = {
+                        "stream_chunk": {
+                            "chunk": token.content,
+                            "node_output_key": node,
+                        }
+                    }
+                    yield f"data: {json.dumps(event)}\n\n"
+                continue
             if mode == "custom":
-                state["session_id"] = session_id
-                yield f"data: {json.dumps(state)}\n\n"
+                if "research" == state.get("source"):
+                    if "node_update" == state.get("type"):
+                        node = state.get("node")
+                        node_state = state.get("state", {})
+                        async with AsyncSession(engine) as db:
+                            await create_message_fn(
+                                session=db,
+                                thread_id=session_id,
+                                role="ai",
+                                node_name=node,
+                                content="",
+                                state=node_state,
+                            )
+                            await db.commit()
+                    state["session_id"] = session_id
+                    yield f"data: {json.dumps(state)}\n\n"
                 continue
 
             if "__interrupt__" in state:
@@ -39,21 +67,29 @@ async def event_generator(
                 yield f"data: {json.dumps(interrupt_state)}\n\n"
                 continue
 
-            node = list(state.keys())[0] if state else None
-            state["session_id"] = session_id
-            if "messages" in state[node]:
-                del state[node]["messages"]
-            async with AsyncSession(engine) as db:
-                await create_message_fn(
-                    session=db,
-                    thread_id=session_id,
-                    role="AI",
-                    node_name=node,
-                    content="",
-                    state=state,
-                )
-                await db.commit()
-            yield f"data: {json.dumps(state)}\n\n"
+            if "updates" == mode:
+                if not state:
+                    continue
+
+                node = list(state.keys())[0] if state else None
+                node_data = state.get(node, {})
+                content = ""
+                if "messages" in node_data:
+                    content = node_data["messages"][-1].content
+                    del node_data["messages"]
+
+                state["session_id"] = session_id
+                async with AsyncSession(engine) as db:
+                    await create_message_fn(
+                        session=db,
+                        thread_id=session_id,
+                        role="ai",
+                        node_name=node,
+                        content=content,
+                        state=state,
+                    )
+                    await db.commit()
+                yield f"data: {json.dumps(state)}\n\n"
     except asyncio.CancelledError:
         yield f"data: {json.dumps({'type': 'stopped', 'session_id': session_id})}\n\n"
     except Exception as e:

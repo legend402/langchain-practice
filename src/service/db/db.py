@@ -5,20 +5,30 @@ from sqlalchemy import Column, ForeignKey, Integer, Identity
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
+
 class ChatSession(SQLModel, table=True):
-  thread_id: str = Field(primary_key=True)
-  title: Optional[str] = None
-  create_at: datetime = Field(default_factory=datetime.now)
+    thread_id: str = Field(primary_key=True)
+    title: Optional[str] = None
+    create_at: datetime = Field(default_factory=datetime.now)
+
 
 class Roles(Enum):
-  HUMAN = "human"
-  AI = "AI"
+    HUMAN = "human"
+    AI = "ai"
+
 
 class ChatMessage(SQLModel, table=True):
-  id: Optional[int] = Field(default=None, sa_column=Column("id", Integer, Identity(), primary_key=True))
-  thread_id: str = Field(default=None, sa_column=Column("thread_id", ForeignKey("chatsession.thread_id", ondelete="CASCADE")))
-  role: str
-  node_name: Optional[str] = None
-  content: Optional[str] = None
-  state: Optional[dict] = Field(default=None, sa_column=Column("state", JSONB))
-  create_at: datetime = Field(default_factory=datetime.now)
+    id: Optional[int] = Field(
+        default=None, sa_column=Column("id", Integer, Identity(), primary_key=True)
+    )
+    thread_id: str = Field(
+        default=None,
+        sa_column=Column(
+            "thread_id", ForeignKey("chatsession.thread_id", ondelete="CASCADE")
+        ),
+    )
+    role: str
+    node_name: Optional[str] = None
+    content: Optional[str] = None
+    state: Optional[dict] = Field(default=None, sa_column=Column("state", JSONB))
+    create_at: datetime = Field(default_factory=datetime.now)

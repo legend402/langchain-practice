@@ -10,7 +10,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 import os
 
-from src.graph import _build_graph
+from src.agent.chat.create_agent import create_chat_agent
 from src.service.db.database import engine, init_db
 from src.service.routes.chat import router as chat_router
 
@@ -23,8 +23,10 @@ DB_URI = os.getenv("PGSQL_DB_URI")
 
 _app: FastAPI | None = None
 
+
 def get_app() -> FastAPI:
     return _app
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,13 +37,14 @@ async def lifespan(app: FastAPI):
     await pool.open()
     checkpointer = AsyncPostgresSaver(pool)
     await checkpointer.setup()
-    app.state.agent = _build_graph(checkpointer)
+    app.state.agent = create_chat_agent(checkpointer)
     await init_db(engine)
     app.state.engine = engine
     app.state.sessions = {}
     _app = app
     yield
     await pool.close()
+
 
 def create_agent_service():
     app = FastAPI(lifespan=lifespan)
@@ -54,5 +57,6 @@ def create_agent_service():
     )
     app.include_router(chat_router)
     return app
+
 
 app = create_agent_service()
