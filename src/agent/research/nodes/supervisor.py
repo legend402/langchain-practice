@@ -110,6 +110,7 @@ supervisor_prompt = """
 {{"supervisor_reason": "有分析结果但 has_tags 为 False，根据规则9选择 tag", "next": "tag"}}
 """
 
+
 def supervisor_input(state: AgentState) -> dict:
     return {
         "messages": state.get("messages", []),
@@ -142,7 +143,10 @@ def supervisor_input(state: AgentState) -> dict:
         "recent_errors": state.get("errors", [])[-3:],
     }
 
-def summarize_search_results(search_results: list[SearchResult], limit: int = 5) -> list[dict]:
+
+def summarize_search_results(
+    search_results: list[SearchResult], limit: int = 5
+) -> list[dict]:
     return [
         {
             "id": item.get("id"),
@@ -154,7 +158,10 @@ def summarize_search_results(search_results: list[SearchResult], limit: int = 5)
         for item in search_results[:limit]
     ]
 
-def summarize_source_materials(source_materials: list[SourceMaterial], limit: int = 5) -> list[dict]:
+
+def summarize_source_materials(
+    source_materials: list[SourceMaterial], limit: int = 5
+) -> list[dict]:
     return [
         {
             "id": item.get("id"),
@@ -165,6 +172,7 @@ def summarize_source_materials(source_materials: list[SourceMaterial], limit: in
         for item in source_materials[:limit]
     ]
 
+
 def _validate_supervisor_result(result: dict, state: AgentState) -> dict:
     next_val = result.get("next", "")
     reason = result.get("supervisor_reason", "")
@@ -174,8 +182,7 @@ def _validate_supervisor_result(result: dict, state: AgentState) -> dict:
 
     if next_val == "finalize":
         review_passed = (
-            isinstance(review_result, dict)
-            and review_result.get("status") == "pass"
+            isinstance(review_result, dict) and review_result.get("status") == "pass"
         )
         human_approved = (
             isinstance(human_feedback, dict)
@@ -190,17 +197,21 @@ def _validate_supervisor_result(result: dict, state: AgentState) -> dict:
             )
     return result
 
+
 async def supervisor_node(state: AgentState):
     llm = init_model()
-    system_prompt = ChatPromptTemplate.from_messages([
-        ("system", supervisor_prompt),
-    ])
+    system_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", supervisor_prompt),
+        ]
+    )
     supervisor_chain = system_prompt | llm | JsonOutputParser()
     result = await supervisor_chain.ainvoke(supervisor_input(state))
     result = _validate_supervisor_result(result, state)
-    messages = state["messages"] + [("AI", get_state_message("supervisor", result))]
+    messages = state["messages"] + [("ai", get_state_message("supervisor", result))]
     result["messages"] = messages
     return result
+
 
 def route_supervisor_node(state: AgentState):
     """总体路由"""

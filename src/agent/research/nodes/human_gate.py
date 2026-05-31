@@ -3,7 +3,7 @@ from langgraph.types import interrupt
 from src.config import AgentState
 from src.utils import node_hook
 from src.utils.agent import get_state_message
-from src.nodes._base import create_structure_node
+from src.agent.research.nodes._base import create_structure_node
 
 human_gate_prompt = """
 你是 human_gate，负责在 Agent 无法自行判断时向用户请求确认或补充信息。
@@ -48,6 +48,7 @@ human_gate_prompt = """
 }}
 """
 
+
 def human_gate_input(state: AgentState) -> dict:
     return {
         "user_query": state.get("user_query"),
@@ -57,17 +58,23 @@ def human_gate_input(state: AgentState) -> dict:
         "human_feedback": state.get("human_feedback"),
     }
 
+
 @node_hook()
 async def human_gate_node(state: AgentState):
     result = await create_structure_node(state, human_gate_prompt, human_gate_input)
-    result["messages"] = state["messages"] + [("AI", get_state_message("human", result))]
-    feedback = interrupt({
-        "human_message": result.get("human_message", ""),
-        "expected_reply_schema": result.get("expected_reply_schema", {}),
-    })
+    result["messages"] = state["messages"] + [
+        ("ai", get_state_message("human", result))
+    ]
+    feedback = interrupt(
+        {
+            "human_message": result.get("human_message", ""),
+            "expected_reply_schema": result.get("expected_reply_schema", {}),
+        }
+    )
     result["human_feedback"] = feedback
     result["messages"].append(("human", get_state_message("human", result)))
     return result
+
 
 def route_human_gate_node(state: AgentState):
     """用户判断应该走哪一条路线"""

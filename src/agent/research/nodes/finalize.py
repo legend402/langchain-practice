@@ -49,6 +49,7 @@ finalize_prompt = """
 只输出最后的markdown文本
 """
 
+
 def finalize_input(state: AgentState) -> dict:
     return {
         "user_query": state.get("user_query"),
@@ -61,24 +62,34 @@ def finalize_input(state: AgentState) -> dict:
         "human_feedback": state.get("human_feedback"),
     }
 
+
 @node_hook()
 async def finalize_node(state: AgentState):
     # result = create_structure_node(state, finalize_prompt, finalize_input)
     llm = init_model()
     writer = get_stream_writer()
-    messages = ChatPromptTemplate.from_messages([
-        ("system", finalize_prompt)
-    ]).format_messages(**finalize_input(state))
+    messages = ChatPromptTemplate.from_messages(
+        [("system", finalize_prompt)]
+    ).format_messages(**finalize_input(state))
 
     full_text = ""
     async for chunk in llm.astream(messages):
         if chunk.content:
             full_text += chunk.content
-            writer({"stream_chunk": {"chunk": chunk.content, "node_output_key": "finalize"}})
+            writer(
+                {
+                    "stream_chunk": {
+                        "chunk": chunk.content,
+                        "node_output_key": "finalize",
+                    }
+                }
+            )
 
     final_state = {
         "final_answer": full_text,
         "trace": ["finalize completed"],
     }
-    final_state["messages"] = state["messages"] + [("AI", get_state_message("finalize", final_state))]
+    final_state["messages"] = state["messages"] + [
+        ("ai", get_state_message("finalize", final_state))
+    ]
     return final_state

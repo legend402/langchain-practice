@@ -1,7 +1,7 @@
 from src.config import AgentState
 from src.utils import node_hook
 from src.utils.agent import get_state_message
-from src.nodes._base import create_structure_node, next_redirect
+from src.agent.research.nodes._base import create_structure_node, next_redirect
 
 knowledge_prompt = """
 你是 knowledge_worker，负责生成结构化知识点总结。
@@ -76,6 +76,7 @@ knowledge_prompt = """
 }}
 """
 
+
 def knowledge_input(state: AgentState) -> dict:
     return {
         "user_query": state.get("user_query"),
@@ -87,8 +88,11 @@ def knowledge_input(state: AgentState) -> dict:
         "source_index": state.get("source_index", []),
     }
 
+
 @node_hook(after_hook=next_redirect)
 async def knowledge_node(state: AgentState):
     result = await create_structure_node(state, knowledge_prompt, knowledge_input)
-    result["messages"] = state["messages"] + [("AI", get_state_message("knowledge", result))]
+    result["messages"] = state["messages"] + [
+        ("ai", get_state_message("knowledge", result))
+    ]
     return result

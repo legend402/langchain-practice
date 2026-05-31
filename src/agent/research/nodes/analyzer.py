@@ -1,7 +1,7 @@
 from src.config import AgentState
 from src.utils import node_hook
 from src.utils.agent import get_state_message
-from src.nodes._base import create_structure_node, next_redirect
+from src.agent.research.nodes._base import create_structure_node, next_redirect
 
 analyze_prompt = """
 你是 analyse_worker，负责把阅读笔记分析成清晰的知识结构。
@@ -62,6 +62,7 @@ analyze_prompt = """
 }}
 """
 
+
 def analyse_input(state: AgentState) -> dict:
     return {
         "user_query": state.get("user_query"),
@@ -71,8 +72,11 @@ def analyse_input(state: AgentState) -> dict:
         "evidence_items": state.get("evidence_items", []),
     }
 
+
 @node_hook(after_hook=next_redirect)
 async def analyze_node(state: AgentState):
     result = await create_structure_node(state, analyze_prompt, analyse_input)
-    result["messages"] = state["messages"] + [("AI", get_state_message("analyze", result))]
+    result["messages"] = state["messages"] + [
+        ("ai", get_state_message("analyze", result))
+    ]
     return result

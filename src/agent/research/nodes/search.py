@@ -5,7 +5,7 @@ from src.config import AgentState
 from src.llm import init_model
 from src.utils import extract_json, node_hook
 from src.utils.agent import get_state_message
-from src.nodes._base import next_redirect
+from src.agent.research.nodes._base import next_redirect
 
 search_prompt = """
 你是 searcher_worker，负责为知识点总结任务寻找资料来源。
@@ -68,6 +68,7 @@ search_prompt = """
 }}
 """
 
+
 def searcher_input(state: AgentState) -> dict:
     return {
         "user_query": state.get("user_query"),
@@ -77,24 +78,25 @@ def searcher_input(state: AgentState) -> dict:
         "supervisor_reason": state.get("supervisor_reason"),
     }
 
+
 @node_hook(after_hook=next_redirect)
 async def search_node(state: AgentState):
     from src.tools.web_search import web_search
     from src.tools.web_fetch import web_fetch
 
     llm = init_model()
-    messages = ChatPromptTemplate.from_messages([
-        ("system", search_prompt)
-    ]).format_messages(**searcher_input(state))
+    messages = ChatPromptTemplate.from_messages(
+        [("system", search_prompt)]
+    ).format_messages(**searcher_input(state))
 
     llm_with_tools = create_tools_agent(llm=llm, tools=[web_search, web_fetch])
     response = await llm_with_tools.ainvoke(messages)
 
     search_state = extract_json(response[-1].content)
     if search_state is None:
-        return {
-            "errors": ["search流程获取数据异常"]
-        }
+        return {"errors": ["search流程获取数据异常"]}
 
-    search_state["messages"] = state["messages"] + [("AI", get_state_message("search", search_state))]
+    search_state["messages"] = state["messages"] + [
+        ("ai", get_state_message("search", search_state))
+    ]
     return search_state

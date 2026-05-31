@@ -1,7 +1,7 @@
 from src.config import AgentState
 from src.utils import node_hook
 from src.utils.agent import get_state_message
-from src.nodes._base import create_structure_node, next_redirect
+from src.agent.research.nodes._base import create_structure_node, next_redirect
 
 tag_prompt = """
 你是 tag_worker，负责为知识点总结生成标签和分类信息。
@@ -49,6 +49,7 @@ tag_prompt = """
 }}
 """
 
+
 def tag_input(state: AgentState) -> dict:
     return {
         "user_query": state.get("user_query"),
@@ -57,8 +58,9 @@ def tag_input(state: AgentState) -> dict:
         "analysis_result": state.get("analysis_result"),
     }
 
+
 @node_hook(after_hook=next_redirect)
 async def tag_node(state: AgentState):
     result = await create_structure_node(state, tag_prompt, tag_input)
-    result["messages"] = state["messages"] + [("AI", get_state_message("tag", result))]
+    result["messages"] = state["messages"] + [("ai", get_state_message("tag", result))]
     return result

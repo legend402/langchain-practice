@@ -1,7 +1,7 @@
 from src.config import AgentState
 from src.utils import node_hook
 from src.utils.agent import get_state_message
-from src.nodes._base import create_structure_node
+from src.agent.research.nodes._base import create_structure_node
 
 reviewer_prompt = """
 你是 reviewer_worker，负责审核知识点总结是否可以进入最终输出。
@@ -64,6 +64,7 @@ search、read、analyze、tag、knowledge 之一。
 }}
 """
 
+
 def reviewer_input(state: AgentState) -> dict:
     return {
         "user_query": state.get("user_query"),
@@ -75,11 +76,15 @@ def reviewer_input(state: AgentState) -> dict:
         "source_index": state.get("source_index", []),
     }
 
+
 @node_hook()
 async def reviewer_node(state: AgentState):
     result = await create_structure_node(state, reviewer_prompt, reviewer_input)
-    result["messages"] = state["messages"] + [("AI", get_state_message("review", result))]
+    result["messages"] = state["messages"] + [
+        ("ai", get_state_message("review", result))
+    ]
     return result
+
 
 def route_review_node(state: AgentState):
     """审核路由"""

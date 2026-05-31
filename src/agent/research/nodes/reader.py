@@ -1,7 +1,7 @@
 from src.config import AgentState
 from src.utils import node_hook
 from src.utils.agent import get_state_message
-from src.nodes._base import create_structure_node, next_redirect
+from src.agent.research.nodes._base import create_structure_node, next_redirect
 
 reader_prompt = """
 你是 reader_worker，负责阅读资料并提取结构化笔记。
@@ -61,6 +61,7 @@ reader_prompt = """
 }}
 """
 
+
 def reader_input(state: AgentState) -> dict:
     return {
         "user_query": state.get("user_query"),
@@ -70,8 +71,9 @@ def reader_input(state: AgentState) -> dict:
         "search_results": state.get("search_results", [])[:8],
     }
 
+
 @node_hook(after_hook=next_redirect)
 async def read_node(state: AgentState):
     result = await create_structure_node(state, reader_prompt, reader_input)
-    result["messages"] = [("AI", get_state_message("read", result))]
+    result["messages"] = [("ai", get_state_message("read", result))]
     return result
