@@ -313,21 +313,20 @@ git commit -m "feat: add research tool with stream forwarding"
 
 ---
 
-### Task 4: 新增 Chat 节点
+### Task 4: 新增 Chat 节点（标准 Agent 模式）
 
 **Files:**
 - Create: `src/nodes/chat.py`
 
-- [ ] **Step 1: 创建 chat 节点**
+核心设计：chat 节点只负责调用 LLM，不手动管理 tool calling 循环。主图通过 `chat → tools → chat` 循环自动处理 tool calls。流式输出由主图的 `stream_mode="messages"` 负责，chat 节点本身不需要 stream_writer。
 
-核心设计：tool calling 阶段用 `ainvoke`（需要完整 `tool_calls`），最终文本回复阶段用 `llm.astream()` 流式输出。
+- [ ] **Step 1: 创建 chat 节点**
 
 ```python
 # src/nodes/chat.py
 import os
 
-from langchain_core.messages import SystemMessage, ToolMessage
-from langgraph.graph.ui import get_stream_writer
+from langchain_core.messages import SystemMessage
 
 from src.config_chat import ChatState
 from src.llm import init_model
@@ -363,83 +362,76 @@ def init_chat_model():
 async def chat_node(state: ChatState) -> dict:
     llm = init_chat_model()
     llm_with_tools = llm.bind_tools([research])
-    writer = get_stream_writer()
 
     messages = [SystemMessage(content=CHAT_SYSTEM_PROMPT)] + state.get("messages", [])
-
-    # Phase 1: tool calling 阶段 — 用 ainvoke（需要完整 tool_calls）
     response = await llm_with_tools.ainvoke(messages)
 
-    while response.tool_calls:
-        messages.append(response)
-        for tool_call in response.tool_calls:
-            if tool_call["name"] == "research":
-                writer({"source": "research", "type": "research_start"})
-                result = await research.ainvoke(tool_call["args"])
-                tool_msg = ToolMessage(content=str(result), tool_call_id=tool_call["id"])
-                messages.append(tool_msg)
-                writer({"source": "research", "type": "research_end", "result": result})
-
-        response = await llm_with_tools.ainvoke(messages)
-
-    # tool calling 结束后，response 是最终文本回复
-    # 把 assistant response 加入 messages
-    messages.append(response)
-
-    # Phase 2: 最终文本回复 — 用不带 tools 的 llm.astream 流式输出
-    # 重新用 astream 生成最终回复，逐字推送给前端
-    stream_messages = messages[:-1]  # 去掉 ainvoke 的结果
-    async for chunk in llm.astream(stream_messages):
-        if chunk.content:
-            writer({"stream_chunk": {"chunk": chunk.content, "node_output_key": "chat"}})
-
-    return {"messages": messages}
+    return {"messages": [response]}
 ```
 
 **说明：**
-- Phase 1（tool calling）：用 `ainvoke`，因为需要拿到完整的 `tool_calls` 列表才能逐个执行 research。这个阶段 LLM 不会输出可见文本，只有 tool call 决策。
-- Phase 2（最终回复）：tool 执行完毕后，LLM 基于工具结果生成最终文本。用不带 tools 的 `llm.astream()` 逐字流式输出，前端能看到打字效果。
-- 注意：Phase 2 实际上是重新调用了一次 LLM，和 Phase 1 最后的 `ainvoke` 有重复。如果 LLM 足够稳定，两次输出内容一致。如果担心不一致，可以改为只做 Phase 1 的 `ainvoke`，然后手动把 `response.content` 切分成 chunk 通过 writer 推送（模拟流式效果）。但真正的 astream 流式更自然。
+- chat_node 是纯粹的 LLM 调用，不手动管理 tool calling 循环
+- 如果 LLM 返回 tool_calls，主图的 `tools` 节点会自动执行 tool，然后循环回 `chat`
+- 如果 LLM 返回纯文本，主图直接结束
+- 流式 token 输出由主图的 `stream_mode="messages"` 自动处理，chat_node 不需要 stream_writer
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add src/nodes/chat.py
-git commit -m "feat: add chat node with streaming output"
+git commit -m "feat: add chat node with standard agent pattern"
 ```
 
 ---
 
-### Task 5: 新增主图构建
+### Task 5: 新增主图构建（标准 Agent 循环）
 
 **Files:**
 - Create: `src/graph_chat.py`
 
 - [ ] **Step 1: 创建主图**
 
+主图采用标准 agent 模式：`chat` 节点调用 LLM，如果返回 tool_calls → `tools` 节点执行 → 循环回 `chat`。如果返回纯文本 → `END`。
+
 ```python
 # src/graph_chat.py
 from langgraph.func import END, START
 from langgraph.graph import StateGraph
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.prebuilt import ToolNode, tools_condition
 
 from src.config_chat import ChatState
 from src.nodes.chat import chat_node
+from src.tools.research import research
 
 
 def _build_chat_graph(checkpointer: AsyncPostgresSaver):
     builder = StateGraph(ChatState)
+
     builder.add_node("chat", chat_node)
+    builder.add_node("tools", ToolNode([research]))
+
     builder.add_edge(START, "chat")
-    builder.add_edge("chat", END)
+    builder.add_conditional_edges("chat", tools_condition, {
+        "tools": "tools",
+        END: END,
+    })
+    builder.add_edge("tools", "chat")
+
     return builder.compile(checkpointer=checkpointer)
 ```
+
+**说明：**
+- `ToolNode([research])`：LangGraph 内置的工具执行节点，自动处理 `ToolMessage` 的生成
+- `tools_condition`：LangGraph 内置的条件路由，检查 `AIMessage` 是否包含 `tool_calls`，有则路由到 `"tools"`，无则路由到 `END`
+- 循环：`chat → (有 tool_calls?) → tools → chat → ... → (无 tool_calls) → END`
+- `stream_mode="messages"` 会自动流式输出每一轮 LLM 调用的 token，包括多轮 tool calling
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add src/graph_chat.py
-git commit -m "feat: add main chat graph builder"
+git commit -m "feat: add main chat graph with standard agent loop"
 ```
 
 ---
@@ -458,7 +450,13 @@ git commit -m "feat: add main chat graph builder"
 
 将 `app.state.agent = _build_graph(checkpointer)` 改为 `app.state.agent = _build_chat_graph(checkpointer)`。
 
-- [ ] **Step 2: 修改 `src/service/routes/sse.py` — 区分 chat/research 事件**
+- [ ] **Step 2: 修改 `src/service/routes/sse.py` — 区分 chat/research 事件，处理 messages 流式 token**
+
+主要改动：
+1. `stream_mode` 从 `["updates", "custom"]` 改为 `["updates", "custom", "messages"]`
+2. 新增 `messages` 模式处理：提取 LLM token chunk，逐字推送给前端
+3. `updates` 模式只处理 chat 节点完成事件（存 DB）
+4. `custom` 模式处理 research 子图转发的中间事件
 
 ```python
 # src/service/routes/sse.py
@@ -467,6 +465,7 @@ import json
 from typing import Any
 from asyncio import Task
 
+from langchain_core.messages import AIMessageChunk
 from langgraph.graph.state import CompiledStateGraph
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -487,19 +486,25 @@ async def event_generator(
     sessions[session_id] = task
     config = {"configurable": {"thread_id": session_id}}
     try:
-        async for mode, state in agent.astream(
-            initial_state, config, stream_mode=["updates", "custom"]
+        async for mode, data in agent.astream(
+            initial_state, config,
+            stream_mode=["updates", "custom", "messages"],
         ):
-            state["session_id"] = session_id
+            if mode == "messages":
+                token, metadata = data
+                if isinstance(token, AIMessageChunk) and token.content:
+                    node = metadata.get("langgraph_node", "chat")
+                    event = {"stream_chunk": {"chunk": token.content, "node_output_key": node}}
+                    yield f"data: {json.dumps(event)}\n\n"
+                continue
 
             if mode == "custom":
-                source = state.get("source")
-
+                source = data.get("source")
                 if source == "research":
-                    event_type = state.get("type")
+                    event_type = data.get("type")
                     if event_type == "node_update":
-                        node = state.get("node")
-                        node_state = state.get("state", {})
+                        node = data.get("node")
+                        node_state = data.get("state", {})
                         async with AsyncSession(engine) as db:
                             await create_message_fn(
                                 session=db,
@@ -510,18 +515,17 @@ async def event_generator(
                                 state=node_state,
                             )
                             await db.commit()
-                    yield f"data: {json.dumps(state)}\n\n"
-                else:
-                    if "stream_chunk" in state:
-                        yield f"data: {json.dumps(state)}\n\n"
-                    continue
+                    data["session_id"] = session_id
+                    yield f"data: {json.dumps(data)}\n\n"
+                continue
 
-            elif mode == "updates":
-                if not state:
+            if mode == "updates":
+                if not data:
                     continue
-                node = list(state.keys())[0]
-                if "messages" in state.get(node, {}):
-                    del state[node]["messages"]
+                node = list(data.keys())[0]
+                if "messages" in data.get(node, {}):
+                    del data[node]["messages"]
+                data["session_id"] = session_id
                 async with AsyncSession(engine) as db:
                     await create_message_fn(
                         session=db,
@@ -529,10 +533,10 @@ async def event_generator(
                         role="AI",
                         node_name=node,
                         content="",
-                        state=state,
+                        state=data,
                     )
                     await db.commit()
-                yield f"data: {json.dumps(state)}\n\n"
+                yield f"data: {json.dumps(data)}\n\n"
 
     except asyncio.CancelledError:
         yield f"data: {json.dumps({'type': 'stopped', 'session_id': session_id})}\n\n"
@@ -541,6 +545,11 @@ async def event_generator(
     finally:
         sessions.pop(session_id, None)
 ```
+
+**说明：**
+- `messages` 模式：LangGraph 自动流式输出每一轮 LLM 调用的 token。`AIMessageChunk.content` 是增量文本 chunk，`metadata["langgraph_node"]` 标识来自哪个节点。无论 LLM 是在输出 tool_calls 的参数还是纯文本，都会产生 stream event。前端只需要关心 `token.content` 非空的情况。
+- `custom` 模式：只处理 research 子图通过 `stream_writer` 转发的中间事件（`source: "research"`）。
+- `updates` 模式：只处理节点完成后的状态更新（存 DB）。
 
 - [ ] **Step 3: 修改 `src/utils/agent.py` — 新增 recover_chat_state**
 
@@ -628,7 +637,7 @@ async def main():
         "user_query": "帮我总结一下 LangGraph 的核心概念",
     }
 
-    async for event in agent.astream(initial_state, stream_mode=["updates", "custom"]):
+    async for event in agent.astream(initial_state, stream_mode=["updates", "custom", "messages"]):
         print(event)
 
     await pool.close()
@@ -708,16 +717,20 @@ git commit -m "feat: update SSE event types for chat mode"
 
 `handleMessage` 回调需要区分 chat 和 research 事件：
 
-1. `stream_chunk` 事件：`node_output_key` 可以是 `"chat"` 或 research 节点名，现有逻辑已能正确处理（创建/追加消息）
+1. `stream_chunk` 事件：`node_output_key` 现在来自 `messages` stream mode 的 metadata，可以是 `"chat"`、`"tools"` 或 research 节点名。`"chat"` 节点的 token 作为 AI 对话消息逐字展示
 2. `source === "research"` 且 `type === "node_update"` 的事件：走现有 research 节点更新逻辑
 3. 移除 `human` 节点的处理逻辑
-4. 新增 `research_start` / `research_end` 事件处理
+4. 移除 `showFeedbackPanel` 相关逻辑和 `submitFeedback` 方法
 
-`stream_chunk` 分支不需要改动，因为 `node_output_key` 现在可以是 `"chat"` 或 research 节点名，都会正确创建/追加消息：
+`stream_chunk` 分支核心逻辑（不需要大改，`node_output_key` 已包含节点名）：
 
 ```typescript
 if (event.stream_chunk) {
   const { chunk, node_output_key } = event.stream_chunk;
+  
+  // tools 节点的 stream 不需要展示（是 tool call 参数的 JSON）
+  if (node_output_key === "tools") return;
+  
   setActiveNode(node_output_key);
   setMessages((prev) => {
     const lastMsg = prev[prev.length - 1];
@@ -738,7 +751,10 @@ if (event.stream_chunk) {
 }
 ```
 
-移除 `showFeedbackPanel` 相关逻辑和 `submitFeedback` 方法。
+关键改动：
+- 过滤掉 `node_output_key === "tools"` 的 stream_chunk（这是 tool call 参数的 JSON 片段，不应展示给用户）
+- `node_output_key === "chat"` 的 token 会被创建为 `nodeName: "chat"` 的消息，前端用 MarkdownRenderer 渲染
+- research 节点的 token 仍然复用现有逻辑
 
 - [ ] **Step 2: 移除 FeedbackPanel 相关代码**
 
