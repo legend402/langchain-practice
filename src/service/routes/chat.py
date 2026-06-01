@@ -9,6 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select, delete
 
 from src.agent.chat.config import recover_chat_state
+from src.service.auth.deps import CurrentUser
 from src.service.controller.ChatMessage import create_message, get_messages
 from src.service.controller.ChatSession import create_session
 from src.service.db.database import get_session, engine
@@ -32,9 +33,11 @@ class ChatFeedback(BaseModel):
 
 
 @router.get("/sessions")
-async def chat_sessions(session: AsyncSession = Depends(get_session)):
+async def chat_sessions(user: CurrentUser, session: AsyncSession = Depends(get_session)):
     result = await session.exec(
-        select(ChatSession).order_by(ChatSession.create_at.desc())
+        select(ChatSession)
+        .where(ChatSession.user_id == user.id)
+        .order_by(ChatSession.create_at.desc())
     )
     return Result.success(result.all())
 
@@ -57,7 +60,7 @@ async def chat_messages(thread_id: str, session: AsyncSession = Depends(get_sess
 
 
 @router.post("/start")
-async def chat_start(body: ChatStart, session: AsyncSession = Depends(get_session)):
+async def chat_start(body: ChatStart, user: CurrentUser, session: AsyncSession = Depends(get_session)):
     from src.service import get_app
 
     app = get_app()
@@ -68,7 +71,7 @@ async def chat_start(body: ChatStart, session: AsyncSession = Depends(get_sessio
     # 如果没有会话记录，就创建新的记录
     if body.thread_id is None:
         await create_session(
-            session=session, thread_id=thread_id, title=body.query[:50]
+            session=session, thread_id=thread_id, title=body.query[:50], user_id=user.id
         )
     # 如果存在记录，就获取完整的记录，然后重新把记录传回get_initial_state，恢复上下文
     elif session.get(ChatSession, thread_id):
