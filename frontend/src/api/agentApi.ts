@@ -9,8 +9,7 @@ import type {
   NodeKey,
   ResponseResult,
 } from "../types/agent";
-
-const API_BASE = "http://localhost:4030";
+import { httpClient } from "./client";
 
 export interface AgentApi {
   abort: AbortController;
@@ -84,7 +83,7 @@ function parseMessages(rows: ChatMessageFromDB[]): ChatMessage[] {
     .map((r) => {
       const role: "human" | "ai" = (r.role === "user" || r.role === "human") ? "human" : "ai";
       const nodeName = (r.node_name || extractNodeName(r.state)) as NodeKey | null;
-      const effectiveNodeName = nodeName === "chat" ? null : nodeName;
+      const effectiveNodeName = (nodeName as string) === "chat" ? null : nodeName;
       const flatState = flattenState(r.state, effectiveNodeName);
 
       let content = r.content ?? "";
@@ -115,13 +114,9 @@ const realApi: AgentApi = {
   ): Promise<void> {
     agentApi.abort.abort();
     agentApi.abort = new AbortController();
-    const response = await fetch(`${API_BASE}/chat/start`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
+    const response = await httpClient.stream("/chat/start", request, {
       signal: agentApi.abort.signal,
     });
-
     await agentApi.dispatchEvent(events, response);
   },
   async dispatchEvent(events: SSEEventHandler, response: Response) {
@@ -157,38 +152,27 @@ const realApi: AgentApi = {
           const parsed: SSEEventData = JSON.parse(payload);
           events.onMessage?.(parsed);
         } catch {
-          // skip non-JSON lines
         }
       }
     }
   },
   async stopChat(session_id: string) {
     agentApi.abort.abort();
-    const res = await fetch(`${API_BASE}/chat/${session_id}/stop`, {
-      method: "POST",
-    });
-    if (!res.ok) throw new Error(`停止会话失败: ${res.status}`);
-    const data = await res.json();
+    const { data } = await httpClient.post<ResponseResult>(`/chat/${session_id}/stop`);
     return data;
   },
   async getSessions(): Promise<ChatSession[]> {
-    const res = await fetch(`${API_BASE}/chat/sessions`);
-    if (!res.ok) throw new Error(`获取会话列表失败: ${res.status}`);
-    const data = await res.json();
-    return data.result ?? data;
+    const { data } = await httpClient.get<ChatSession[]>("/chat/sessions");
+    return data;
   },
 
   async getMessages(threadId: string): Promise<ChatMessage[]> {
-    const res = await fetch(`${API_BASE}/chat/${threadId}/messages`);
-    if (!res.ok) throw new Error(`获取消息失败: ${res.status}`);
-    const data = await res.json();
-    const rows: ChatMessageFromDB[] = data.result ?? data;
-    return parseMessages(rows);
+    const { data } = await httpClient.get<ChatMessageFromDB[]>(`/chat/${threadId}/messages`);
+    return parseMessages(data);
   },
 
   async deleteSession(threadId: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/chat/${threadId}`, { method: "DELETE" });
-    if (!res.ok) throw new Error(`删除会话失败: ${res.status}`);
+    await httpClient.delete(`/chat/${threadId}`);
   },
 };
 

@@ -217,10 +217,10 @@ export function useAgentChat() {
       const nodeState = event.state as Record<string, unknown>;
       if (!nodeKey || !nodeState) return;
 
-      const flatEvent = { ...nodeState, session_id: event.session_id };
+      const flatEvent: Record<string, unknown> = { ...nodeState, session_id: event.session_id };
       const nodeData = flatEvent[nodeKey];
 
-      stateRef.current = accumulateState(stateRef.current, flatEvent, nodeKey);
+      stateRef.current = accumulateState(stateRef.current, flatEvent as SSEEventData, nodeKey as NodeKey);
       setCurrentState({ ...stateRef.current });
 
       if (nodeKey === "supervisor") {
@@ -243,7 +243,7 @@ export function useAgentChat() {
       const agentMsg: ChatMessage = {
         id: uuid(),
         role: "ai",
-        content: getNodeSummary(nodeKey, nodeData),
+        content: getNodeSummary(nodeKey as NodeKey, nodeData as NonNullable<SSEEventData[NodeKey]>),
         state: { ...stateRef.current },
         nodeName: nodeKey,
         timestamp: Date.now(),

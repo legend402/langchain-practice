@@ -9,6 +9,8 @@ interface SessionSidebarProps {
   onDelete: (threadId: string) => void;
   collapsed: boolean;
   onToggle: () => void;
+  userEmail?: string;
+  onLogout: () => void;
 }
 
 function formatTime(iso: string) {
@@ -27,6 +29,8 @@ export default function SessionSidebar({
   onDelete,
   collapsed,
   onToggle,
+  userEmail,
+  onLogout,
 }: SessionSidebarProps) {
   return (
     <>
@@ -93,6 +97,17 @@ export default function SessionSidebar({
               ))}
             </div>
           )}
+        </div>
+        <div className="px-3 py-3 border-t border-white/30 mt-auto">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-ink-400 truncate">{userEmail}</span>
+            <button
+              onClick={onLogout}
+              className="text-xs text-ink-400 hover:text-red-500 transition-colors cursor-pointer"
+            >
+              退出
+            </button>
+          </div>
         </div>
       </aside>
 
