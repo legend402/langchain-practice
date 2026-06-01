@@ -19,7 +19,7 @@ class User(UserMixin, table=True):
   refresh_token: list[RefreshToken] = Relationship()
 
 class AppUserSchema(UserSchema):
-  pass
+  user_name: str = ""
 
 class AppCreateUserSchema(CreateUserSchema):
   user_name: str = ""
