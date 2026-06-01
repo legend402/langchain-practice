@@ -16,3 +16,4 @@ sqlmodel
 alembic
 asyncpg
 greenlet
+fastapi-fullauth[sqlmodel,redis]
