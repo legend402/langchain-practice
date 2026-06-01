@@ -52,9 +52,10 @@ async def lifespan(app: FastAPI):
     yield
     await pool.close()
 
+
 def create_agent_service():
     app = FastAPI(lifespan=lifespan)
-    
+
     register_error_handler(app)
 
     app.add_middleware(
@@ -65,7 +66,7 @@ def create_agent_service():
         allow_headers=["*"],
     )
     app.include_router(chat_router)
-    app.include_router(auth_router)
+    app.include_router(auth_router, prefix="/api/v1")
     return app
 
 
