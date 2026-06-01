@@ -1,6 +1,7 @@
 from datetime import datetime
 from enum import Enum
 from typing import Optional
+from uuid import UUID
 from sqlalchemy import Column, ForeignKey, Integer, Identity
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
@@ -9,6 +10,7 @@ from sqlmodel import Field, SQLModel
 class ChatSession(SQLModel, table=True):
     thread_id: str = Field(primary_key=True)
     title: Optional[str] = None
+    user_id: Optional[UUID] = Field(default=None, foreign_key="fullauth_users.id")
     create_at: datetime = Field(default_factory=datetime.now)
 
 
