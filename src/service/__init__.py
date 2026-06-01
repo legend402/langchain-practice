@@ -11,8 +11,11 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 import os
 
 from src.agent.chat.create_agent import create_chat_agent
-from src.service.db.database import engine, init_db
+from src.service.auth.auth import create_fullauth
+from src.service.db.database import engine, session_marker, init_db
+from src.service.error import register_error_handler
 from src.service.routes.chat import router as chat_router
+from src.service.routes.auth import router as auth_router
 
 load_dotenv()
 
@@ -42,12 +45,18 @@ async def lifespan(app: FastAPI):
     app.state.engine = engine
     app.state.sessions = {}
     _app = app
+
+    fullauth = create_fullauth(session_marker=session_marker)
+    app.state.fullauth = fullauth
+
     yield
     await pool.close()
 
-
 def create_agent_service():
     app = FastAPI(lifespan=lifespan)
+    
+    register_error_handler(app)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -56,6 +65,7 @@ def create_agent_service():
         allow_headers=["*"],
     )
     app.include_router(chat_router)
+    app.include_router(auth_router)
     return app
 
 

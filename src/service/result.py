@@ -22,3 +22,7 @@ class Result:
   @staticmethod
   def serve_error(message: str = "服务器错误"):
     return ResultOptions(code=500, success=False, result=None, message=message)
+  
+  @staticmethod
+  def un_authorized(message: str = ""):
+    return ResultOptions(code=401, success=False, result=None, message=message)
