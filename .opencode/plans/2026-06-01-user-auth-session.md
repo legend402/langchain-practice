@@ -35,19 +35,21 @@
 | 文件 | 职责 |
 |------|------|
 | `frontend/src/types/auth.ts` | 认证相关 TypeScript 类型 |
-| `frontend/src/api/tokenStore.ts` | 令牌存储（access/refresh 的 get/set/clear），仅负责读写 |
-| `frontend/src/api/http.ts` | 统一 HTTP 客户端：自动注入 Authorization、401 自动刷新重试、请求/响应拦截 |
-| `frontend/src/api/authApi.ts` | 认证 API（注册、登录、刷新、登出、获取用户），基于 http 客户端 |
-| `frontend/src/hooks/useAuth.tsx` | AuthProvider 上下文 + useAuth Hook |
+| `frontend/src/api/client/tokenStorage.ts` | `TokenStorage` 接口 + `LocalStorageTokenStorage` / `MemoryTokenStorage` 实现 |
+| `frontend/src/api/client/httpClient.ts` | `HttpClient` 类：可插拔拦截器管道、`request/stream/raw` 三种请求模式 |
+| `frontend/src/api/client/authInterceptors.ts` | `createAuthInterceptors()` 工厂：Bearer 注入 + 401 刷新 + 防并发 |
+| `frontend/src/api/client/index.ts` | barrel 导出：`httpClient` 单例 + `tokenStorage` 单例（含拦截器注册） |
+| `frontend/src/api/authApi.ts` | 认证 API（注册、登录、刷新、登出、获取用户），基于 `HttpClient` |
+| `frontend/src/hooks/useAuth.tsx` | `AuthProvider` 上下文 + `useAuth` Hook |
 | `frontend/src/components/LoginPage.tsx` | 登录页面（邮箱/用户名 + 密码） |
 | `frontend/src/components/RegisterPage.tsx` | 注册页面（邮箱 + 用户名 + 密码） |
 
 ### 前端 — 修改文件
 | 文件 | 变更内容 |
 |------|----------|
-| `frontend/src/main.tsx` | 用 AuthProvider 包裹 App |
+| `frontend/src/main.tsx` | 用 `AuthProvider` 包裹 `App` |
 | `frontend/src/App.tsx` | 路由守卫：未登录显示登录页，已登录显示聊天页 |
-| `frontend/src/api/agentApi.ts` | 用 http 客户端替代手动 fetch，删除所有 token 拼接逻辑 |
+| `frontend/src/api/agentApi.ts` | 用 `httpClient` 替代手动 `fetch`，删除 `API_BASE` 和所有 token 拼接逻辑 |
 | `frontend/src/components/SessionSidebar.tsx` | 显示用户邮箱 + 登出按钮 |
 
 ---
@@ -965,6 +967,49 @@ git commit -m "fix: address backend auth issues found during testing"
 
 ---
 
+## 前端架构概览（任务 11–17）
+
+> **设计原则：** 分层清晰、职责单一、面向接口编程、便于扩展和测试。
+>
+> **层级划分：**
+> ```
+> types/        — 纯类型，零依赖
+> api/client/   — HTTP 基础设施（拦截器管道、token 存储、错误处理）
+> api/          — 业务 API（authApi、agentApi），依赖 client 层
+> hooks/        — React 状态管理（useAuth），依赖 api 层
+> components/   — UI 组件，只依赖 hooks 和 types
+> ```
+>
+> **与旧方案的关键差异：**
+> 1. **`TokenStorage` 接口 + `LocalStorageTokenStorage` 实现** — 可替换为 `MemoryTokenStorage`（测试）或 `SessionStorageTokenStorage`
+> 2. **`HttpClient` 类 + 拦截器管道** — 请求/响应拦截器可插拔，不再在方法签名中暴露 `skipAuth` 等内部细节
+> 3. **`createAuthInterceptors()` 工厂函数** — 将认证逻辑（注入 header、401 刷新、防并发）封装为独立拦截器，可按需装卸
+> 4. **`authApi` 不再导出 `tokenStore`** — 层级依赖清晰，上层不直接操作存储
+> 5. **`agentApi` 改造为使用 `HttpClient`** — SSE 流也经过拦截器管道，401 刷新统一处理，无需手动 retry
+
+### 前端 — 新建文件
+| 文件 | 职责 |
+|------|------|
+| `frontend/src/types/auth.ts` | 认证相关 TypeScript 类型 |
+| `frontend/src/api/client/tokenStorage.ts` | `TokenStorage` 接口 + `LocalStorageTokenStorage` 实现 |
+| `frontend/src/api/client/httpClient.ts` | `HttpClient` 类：拦截器管道、请求方法、错误处理 |
+| `frontend/src/api/client/authInterceptors.ts` | 认证拦截器工厂（注入 Bearer、401 刷新、防并发） |
+| `frontend/src/api/client/index.ts` | barrel 导出：`httpClient` 单例 + tokenStorage 单例 |
+| `frontend/src/api/authApi.ts` | 认证 API（注册、登录、刷新、登出、获取用户），基于 `HttpClient` |
+| `frontend/src/hooks/useAuth.tsx` | `AuthProvider` 上下文 + `useAuth` Hook |
+| `frontend/src/components/LoginPage.tsx` | 登录页面（邮箱/用户名 + 密码） |
+| `frontend/src/components/RegisterPage.tsx` | 注册页面（邮箱 + 用户名 + 密码） |
+
+### 前端 — 修改文件
+| 文件 | 变更内容 |
+|------|----------|
+| `frontend/src/main.tsx` | 用 `AuthProvider` 包裹 `App` |
+| `frontend/src/App.tsx` | 路由守卫：未登录显示登录页，已登录显示聊天页 |
+| `frontend/src/api/agentApi.ts` | 用 `httpClient` 替代手动 `fetch`，删除所有 `API_BASE` / 手动 token 拼接逻辑 |
+| `frontend/src/components/SessionSidebar.tsx` | 显示用户邮箱 + 登出按钮 |
+
+---
+
 ## 任务 11：前端 — 认证类型定义
 
 **涉及文件：**
@@ -1018,86 +1063,124 @@ git commit -m "feat: add auth TypeScript types"
 
 ---
 
-## 任务 12：前端 — 令牌存储模块
+## 任务 12：前端 — Token 存储抽象层
 
 **涉及文件：**
-- 新建：`frontend/src/api/tokenStore.ts`
+- 新建：`frontend/src/api/client/tokenStorage.ts`
 
-职责单一：只管 token 的读写，不管网络请求。
+**设计说明：**
+- 定义 `TokenStorage` 接口，包含 `getAccessToken` / `setAccessToken` / `getRefreshToken` / `setRefreshToken` / `clear` / `hasToken` 六个方法
+- 提供 `LocalStorageTokenStorage` 默认实现，使用 `localStorage` 持久化 + 内存缓存避免频繁 I/O
+- 未来可轻松替换为 `SessionStorageTokenStorage`、`MemoryTokenStorage`（用于测试），或 `CookieTokenStorage`
 
-- [ ] **步骤 1：创建 tokenStore.ts**
+- [ ] **步骤 1：创建 tokenStorage.ts**
 
 ```typescript
+export interface TokenStorage {
+  getAccessToken(): string | null;
+  setAccessToken(token: string | null): void;
+  getRefreshToken(): string | null;
+  setRefreshToken(token: string | null): void;
+  clear(): void;
+  hasToken(): boolean;
+}
+
 const ACCESS_KEY = "access_token";
 const REFRESH_KEY = "refresh_token";
 
-let _accessToken: string | null = localStorage.getItem(ACCESS_KEY);
+export class LocalStorageTokenStorage implements TokenStorage {
+  private _accessToken: string | null = localStorage.getItem(ACCESS_KEY);
 
-export function getAccessToken(): string | null {
-  return _accessToken;
+  getAccessToken(): string | null {
+    return this._accessToken;
+  }
+
+  setAccessToken(token: string | null): void {
+    this._accessToken = token;
+    if (token) localStorage.setItem(ACCESS_KEY, token);
+    else localStorage.removeItem(ACCESS_KEY);
+  }
+
+  getRefreshToken(): string | null {
+    return localStorage.getItem(REFRESH_KEY);
+  }
+
+  setRefreshToken(token: string | null): void {
+    if (token) localStorage.setItem(REFRESH_KEY, token);
+    else localStorage.removeItem(REFRESH_KEY);
+  }
+
+  clear(): void {
+    this.setAccessToken(null);
+    this.setRefreshToken(null);
+  }
+
+  hasToken(): boolean {
+    return this._accessToken !== null;
+  }
 }
 
-export function setAccessToken(token: string | null) {
-  _accessToken = token;
-  if (token) localStorage.setItem(ACCESS_KEY, token);
-  else localStorage.removeItem(ACCESS_KEY);
-}
+export class MemoryTokenStorage implements TokenStorage {
+  private _accessToken: string | null = null;
+  private _refreshToken: string | null = null;
 
-export function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_KEY);
-}
+  getAccessToken(): string | null {
+    return this._accessToken;
+  }
 
-export function setRefreshToken(token: string | null) {
-  if (token) localStorage.setItem(REFRESH_KEY, token);
-  else localStorage.removeItem(REFRESH_KEY);
-}
+  setAccessToken(token: string | null): void {
+    this._accessToken = token;
+  }
 
-export function clearTokens() {
-  setAccessToken(null);
-  setRefreshToken(null);
-}
+  getRefreshToken(): string | null {
+    return this._refreshToken;
+  }
 
-export function hasToken(): boolean {
-  return _accessToken !== null;
+  setRefreshToken(token: string | null): void {
+    this._refreshToken = token;
+  }
+
+  clear(): void {
+    this._accessToken = null;
+    this._refreshToken = null;
+  }
+
+  hasToken(): boolean {
+    return this._accessToken !== null;
+  }
 }
 ```
 
 - [ ] **步骤 2：提交**
 
 ```bash
-git add frontend/src/api/tokenStore.ts
-git commit -m "feat: add token storage module"
+git add frontend/src/api/client/tokenStorage.ts
+git commit -m "feat: add TokenStorage interface with LocalStorage and Memory implementations"
 ```
 
 ---
 
-## 任务 13：前端 — 统一 HTTP 客户端
+## 任务 13：前端 — HttpClient 类（拦截器管道）
 
 **涉及文件：**
-- 新建：`frontend/src/api/http.ts`
+- 新建：`frontend/src/api/client/httpClient.ts`
 
-这是前端请求层的核心。封装 `fetch`，提供三个关键能力：
-1. **自动注入 Authorization 请求头** — 所有经过 `http.get/post` 发出的请求自动带上 Bearer token
-2. **401 自动刷新 + 重试** — 收到 401 时自动调用 refresh 接口，成功后重发原请求；刷新也失败则清除 token
-3. **防并发刷新** — 多个请求同时 401 时，只发一次 refresh，其余请求排队等待同一个 refresh Promise
+**设计说明：**
+- `HttpClient` 是所有 API 请求的统一入口，不包含任何业务逻辑
+- **拦截器管道（Interceptor Pipeline）：**
+  - `RequestInterceptor`：在请求发出前修改 `RequestInit`（如注入 header）
+  - `ResponseInterceptor`：在收到响应后、返回给调用方前执行逻辑（如 401 刷新重试）
+  - 拦截器可动态注册/注销，支持按场景组合
+- **三种请求模式：**
+  - `request<T>()` — 标准 JSON 请求，自动解析响应，抛 `HttpException`
+  - `stream()` — 返回原始 `Response`，用于 SSE 流式场景，仍然经过拦截器管道
+  - `raw()` — 完全绕过拦截器，用于 refresh 等底层调用，避免循环依赖
+- **URL 拼接：** 所有方法接收相对路径，内部拼 `BASE_URL`
 
-设计说明：
-- `http.get/post` 返回解析后的 JSON（`ApiResponse<T>`）
-- `http.stream` 返回原始 `Response`（用于 SSE 流式场景，不做 JSON 解析）
-- `http.raw` 返回原始 `Response`（完全不做任何拦截，用于特殊场景）
-- 所有认证相关接口（login/register/refresh/logout）通过 `http.raw` 或 `skipAuth` 参数跳过自动注入，避免循环依赖
-
-- [ ] **步骤 1：创建 http.ts**
+- [ ] **步骤 1：创建 httpClient.ts**
 
 ```typescript
-import * as tokenStore from "./tokenStore";
-
 const BASE_URL = "http://localhost:4030";
-
-export interface HttpError {
-  status: number;
-  detail: string;
-}
 
 export interface ApiResponse<T = unknown> {
   ok: boolean;
@@ -1106,162 +1189,314 @@ export interface ApiResponse<T = unknown> {
 }
 
 export class HttpException extends Error {
-  status: number;
-  detail: string;
+  readonly status: number;
+  readonly detail: string;
   constructor(status: number, detail: string) {
     super(detail);
+    this.name = "HttpException";
     this.status = status;
     this.detail = detail;
   }
 }
 
-let refreshPromise: Promise<boolean> | null = null;
-
-async function refreshTokens(): Promise<boolean> {
-  const refreshToken = tokenStore.getRefreshToken();
-  if (!refreshToken) return false;
-  try {
-    const res = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    if (!res.ok) {
-      tokenStore.clearTokens();
-      return false;
-    }
-    const data = await res.json();
-    tokenStore.setAccessToken(data.access_token);
-    tokenStore.setRefreshToken(data.refresh_token);
-    return true;
-  } catch {
-    tokenStore.clearTokens();
-    return false;
-  }
-}
-
-async function ensureRefreshed(): Promise<boolean> {
-  if (refreshPromise) return refreshPromise;
-  refreshPromise = refreshTokens().finally(() => {
-    refreshPromise = null;
-  });
-  return refreshPromise;
-}
-
-async function authFetch(
+export type RequestInterceptor = (
   url: string,
-  init?: RequestInit,
-  options?: { skipAuth?: boolean },
-): Promise<Response> {
-  const token = tokenStore.getAccessToken();
-  const headers = new Headers(init?.headers);
-  if (!headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-  if (token && !options?.skipAuth) {
-    headers.set("Authorization", `Bearer ${token}`);
+  init: RequestInit,
+) => Promise<{ url: string; init: RequestInit }> | { url: string; init: RequestInit };
+
+export type ResponseInterceptor = (
+  response: Response,
+  url: string,
+  init: RequestInit,
+  retry: (url: string, init: RequestInit) => Promise<Response>,
+) => Promise<Response>;
+
+export class HttpClient {
+  private readonly _requestInterceptors: RequestInterceptor[] = [];
+  private readonly _responseInterceptors: ResponseInterceptor[] = [];
+
+  useRequestInterceptor(interceptor: RequestInterceptor): () => void {
+    this._requestInterceptors.push(interceptor);
+    return () => {
+      const idx = this._requestInterceptors.indexOf(interceptor);
+      if (idx >= 0) this._requestInterceptors.splice(idx, 1);
+    };
   }
 
-  const response = await fetch(url, { ...init, headers });
+  useResponseInterceptor(interceptor: ResponseInterceptor): () => void {
+    this._responseInterceptors.push(interceptor);
+    return () => {
+      const idx = this._responseInterceptors.indexOf(interceptor);
+      if (idx >= 0) this._responseInterceptors.splice(idx, 1);
+    };
+  }
 
-  if (response.status === 401 && token && !options?.skipAuth) {
-    const refreshed = await ensureRefreshed();
-    if (refreshed) {
-      const newToken = tokenStore.getAccessToken();
-      headers.set("Authorization", `Bearer ${newToken}`);
-      return fetch(url, { ...init, headers });
+  private resolveUrl(path: string): string {
+    if (path.startsWith("http")) return path;
+    return `${BASE_URL}${path}`;
+  }
+
+  private async applyRequestInterceptors(
+    url: string,
+    init: RequestInit,
+  ): Promise<{ url: string; init: RequestInit }> {
+    let result = { url, init };
+    for (const interceptor of this._requestInterceptors) {
+      result = await interceptor(result.url, result.init);
     }
-    tokenStore.clearTokens();
+    return result;
   }
 
-  return response;
-}
+  private async applyResponseInterceptors(
+    response: Response,
+    url: string,
+    init: RequestInit,
+  ): Promise<Response> {
+    const retry = (retryUrl: string, retryInit: RequestInit) =>
+      this.fetchWithInterceptors(retryUrl, retryInit);
 
-async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
-  if (!response.ok) {
-    let detail = `请求失败: ${response.status}`;
-    try {
-      const body = await response.json();
-      detail = body.detail || detail;
-    } catch {}
-    throw new HttpException(response.status, detail);
+    let result = response;
+    for (const interceptor of this._responseInterceptors) {
+      result = await interceptor(result, url, init, retry);
+    }
+    return result;
   }
-  const data: T = await response.json();
-  return { ok: true, data, status: response.status };
-}
 
-function fullUrl(path: string): string {
-  if (path.startsWith("http")) return path;
-  return `${BASE_URL}${path}`;
-}
+  private async fetchWithInterceptors(
+    url: string,
+    init: RequestInit,
+  ): Promise<Response> {
+    const resolved = await this.applyRequestInterceptors(
+      this.resolveUrl(url),
+      init,
+    );
+    const response = await fetch(resolved.url, resolved.init);
+    return this.applyResponseInterceptors(response, url, init);
+  }
 
-export const http = {
-  async get<T = unknown>(path: string): Promise<ApiResponse<T>> {
-    const res = await authFetch(fullUrl(path));
-    return handleResponse<T>(res);
-  },
-
-  async post<T = unknown>(
-    path: string,
-    body?: unknown,
-    options?: { skipAuth?: boolean },
-  ): Promise<ApiResponse<T>> {
-    const res = await authFetch(fullUrl(path), {
-      method: "POST",
-      body: body ? JSON.stringify(body) : undefined,
-    }, options);
-    return handleResponse<T>(res);
-  },
-
-  async delete<T = unknown>(path: string): Promise<ApiResponse<T>> {
-    const res = await authFetch(fullUrl(path), { method: "DELETE" });
-    return handleResponse<T>(res);
-  },
-
-  async stream(path: string, body?: unknown, init?: RequestInit): Promise<Response> {
-    const token = tokenStore.getAccessToken();
-    const headers = new Headers(init?.headers);
+  private ensureJsonHeader(init: RequestInit): RequestInit {
+    const headers =
+      init.headers instanceof Headers
+        ? init.headers
+        : new Headers(init.headers as Record<string, string>);
     if (!headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
-    if (token) {
-      headers.set("Authorization", `Bearer ${token}`);
+    return { ...init, headers };
+  }
+
+  async request<T = unknown>(url: string, init: RequestInit = {}): Promise<ApiResponse<T>> {
+    const response = await this.fetchWithInterceptors(url, this.ensureJsonHeader(init));
+    if (!response.ok) {
+      let detail = `请求失败: ${response.status}`;
+      try {
+        const body = await response.json();
+        detail = body.detail || detail;
+      } catch {}
+      throw new HttpException(response.status, detail);
     }
-    return fetch(fullUrl(path), {
-      ...init,
+    const data: T = await response.json();
+    return { ok: true, data, status: response.status };
+  }
+
+  async get<T = unknown>(url: string): Promise<ApiResponse<T>> {
+    return this.request<T>(url, { method: "GET" });
+  }
+
+  async post<T = unknown>(url: string, body?: unknown): Promise<ApiResponse<T>> {
+    return this.request<T>(url, {
       method: "POST",
-      headers,
       body: body ? JSON.stringify(body) : undefined,
     });
-  },
+  }
 
-  raw(path: string, init?: RequestInit): Promise<Response> {
-    return fetch(fullUrl(path), init);
-  },
-};
+  async delete<T = unknown>(url: string): Promise<ApiResponse<T>> {
+    return this.request<T>(url, { method: "DELETE" });
+  }
+
+  async stream(url: string, body?: unknown, init: RequestInit = {}): Promise<Response> {
+    return this.fetchWithInterceptors(
+      url,
+      this.ensureJsonHeader({
+        ...init,
+        method: "POST",
+        body: body ? JSON.stringify(body) : undefined,
+      }),
+    );
+  }
+
+  raw(url: string, init: RequestInit = {}): Promise<Response> {
+    return fetch(this.resolveUrl(url), init);
+  }
+}
 ```
 
 - [ ] **步骤 2：提交**
 
 ```bash
-git add frontend/src/api/http.ts
-git commit -m "feat: add unified HTTP client with auto auth and 401 refresh"
+git add frontend/src/api/client/httpClient.ts
+git commit -m "feat: add HttpClient class with pluggable interceptor pipeline"
 ```
 
 ---
 
-## 任务 14：前端 — 认证 API 层
+## 任务 14：前端 — 认证拦截器
+
+**涉及文件：**
+- 新建：`frontend/src/api/client/authInterceptors.ts`
+
+**设计说明：**
+- `createAuthInterceptors(tokenStorage)` 是一个工厂函数，返回一对 `{ requestInterceptor, responseInterceptor }`
+- **请求拦截器：** 从 `tokenStorage` 读取 `accessToken`，注入 `Authorization: Bearer <token>` 头
+- **响应拦截器：** 拦截 401 瓍应，执行 token 刷新（复用 `tokenStorage`），刷新成功后自动重发原请求；多个请求同时 401 时共享同一个刷新 Promise（防并发）
+- 刷新失败时调用 `tokenStorage.clear()` 清除凭证
+- `tokenStorage` 作为参数注入，不硬编码依赖，便于测试时替换
+
+- [ ] **步骤 1：创建 authInterceptors.ts**
+
+```typescript
+import type { TokenStorage } from "./tokenStorage";
+import type { RequestInterceptor, ResponseInterceptor } from "./httpClient";
+
+export function createAuthInterceptors(tokenStorage: TokenStorage): {
+  requestInterceptor: RequestInterceptor;
+  responseInterceptor: ResponseInterceptor;
+} {
+  let refreshPromise: Promise<boolean> | null = null;
+
+  async function refreshTokens(): Promise<boolean> {
+    const refreshToken = tokenStorage.getRefreshToken();
+    if (!refreshToken) return false;
+    try {
+      const res = await fetch("http://localhost:4030/api/v1/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (!res.ok) {
+        tokenStorage.clear();
+        return false;
+      }
+      const data = await res.json();
+      tokenStorage.setAccessToken(data.access_token);
+      tokenStorage.setRefreshToken(data.refresh_token);
+      return true;
+    } catch {
+      tokenStorage.clear();
+      return false;
+    }
+  }
+
+  async function ensureRefreshed(): Promise<boolean> {
+    if (refreshPromise) return refreshPromise;
+    refreshPromise = refreshTokens().finally(() => {
+      refreshPromise = null;
+    });
+    return refreshPromise;
+  }
+
+  const requestInterceptor: RequestInterceptor = (url, init) => {
+    const token = tokenStorage.getAccessToken();
+    if (!token) return { url, init };
+    const headers =
+      init.headers instanceof Headers
+        ? init.headers
+        : new Headers(init.headers as Record<string, string>);
+    headers.set("Authorization", `Bearer ${token}`);
+    return { url, init: { ...init, headers } };
+  };
+
+  const responseInterceptor: ResponseInterceptor = async (
+    response,
+    url,
+    init,
+    retry,
+  ) => {
+    if (response.status !== 401) return response;
+    if (!tokenStorage.hasToken()) return response;
+
+    const refreshed = await ensureRefreshed();
+    if (!refreshed) return response;
+
+    const newToken = tokenStorage.getAccessToken();
+    const headers =
+      init.headers instanceof Headers
+        ? init.headers
+        : new Headers(init.headers as Record<string, string>);
+    if (newToken) headers.set("Authorization", `Bearer ${newToken}`);
+
+    return retry(url, { ...init, headers });
+  };
+
+  return { requestInterceptor, responseInterceptor };
+}
+```
+
+- [ ] **步骤 2：提交**
+
+```bash
+git add frontend/src/api/client/authInterceptors.ts
+git commit -m "feat: add auth interceptor factory with token refresh and concurrency guard"
+```
+
+---
+
+## 任务 15：前端 — 组装 HttpClient 单例
+
+**涉及文件：**
+- 新建：`frontend/src/api/client/index.ts`
+
+**设计说明：**
+- 创建 `tokenStorage` 和 `httpClient` 单例
+- 调用 `createAuthInterceptors` 生成拦截器并注册到 `httpClient`
+- 导出 `httpClient` 供 `authApi` 和 `agentApi` 使用
+- 导出 `tokenStorage` 供 `authApi` 在登录/注册/登出时直接操作 token
+
+- [ ] **步骤 1：创建 index.ts**
+
+```typescript
+import { LocalStorageTokenStorage } from "./tokenStorage";
+import type { TokenStorage } from "./tokenStorage";
+import { HttpClient } from "./httpClient";
+import { createAuthInterceptors } from "./authInterceptors";
+
+export type { TokenStorage } from "./tokenStorage";
+export { HttpException } from "./httpClient";
+export type { ApiResponse } from "./httpClient";
+
+export const tokenStorage: TokenStorage = new LocalStorageTokenStorage();
+
+export const httpClient = new HttpClient();
+
+const { requestInterceptor, responseInterceptor } = createAuthInterceptors(tokenStorage);
+httpClient.useRequestInterceptor(requestInterceptor);
+httpClient.useResponseInterceptor(responseInterceptor);
+```
+
+- [ ] **步骤 2：提交**
+
+```bash
+git add frontend/src/api/client/index.ts
+git commit -m "feat: assemble httpClient singleton with auth interceptors"
+```
+
+---
+
+## 任务 16：前端 — 认证 API 层
 
 **涉及文件：**
 - 新建：`frontend/src/api/authApi.ts`
 
-基于 `http` 客户端实现，不再手动管理 token 注入。
+**设计说明：**
+- `authApi` 对象封装所有认证相关 API 调用
+- 登录/注册使用 `httpClient.raw()`（绕过拦截器，因为此时可能没有 token），手动处理响应
+- `getMe` 和 `logout` 使用 `httpClient`（经过拦截器，自动注入 token）
+- token 写入通过 `tokenStorage`（从 `./client` 导入），不跨层依赖
 
 - [ ] **步骤 1：创建 authApi.ts**
 
 ```typescript
-import { http } from "./http";
-import * as tokenStore from "./tokenStore";
+import { httpClient, tokenStorage } from "./client";
 import type {
   AuthResponse,
   AuthUser,
@@ -1269,74 +1504,97 @@ import type {
   RegisterRequest,
 } from "../types/auth";
 
-export { tokenStore };
+export { tokenStorage };
 
-export async function register(data: RegisterRequest): Promise<AuthResponse> {
-  const { data: result } = await http.post<AuthResponse>(
-    "/api/v1/auth/register",
-    data,
-    { skipAuth: true },
-  );
-  tokenStore.setAccessToken(result.access_token);
-  tokenStore.setRefreshToken(result.refresh_token);
-  return result;
-}
-
-export async function login(data: LoginRequest): Promise<AuthResponse> {
-  const { data: result } = await http.post<AuthResponse>(
-    "/api/v1/auth/login",
-    data,
-    { skipAuth: true },
-  );
-  tokenStore.setAccessToken(result.access_token);
-  tokenStore.setRefreshToken(result.refresh_token);
-  return result;
-}
-
-export async function getMe(): Promise<AuthUser> {
-  const { data } = await http.get<AuthUser>("/api/v1/auth/me");
-  return data;
-}
-
-export async function refresh(): Promise<boolean> {
-  const refreshToken = tokenStore.getRefreshToken();
-  if (!refreshToken) return false;
-  try {
-    const { data } = await http.post<{ access_token: string; refresh_token: string }>(
-      "/api/v1/auth/refresh",
-      { refresh_token: refreshToken },
-      { skipAuth: true },
-    );
-    tokenStore.setAccessToken(data.access_token);
-    tokenStore.setRefreshToken(data.refresh_token);
-    return true;
-  } catch {
-    tokenStore.clearTokens();
-    return false;
-  }
-}
-
-export async function logout(): Promise<void> {
-  const refreshToken = tokenStore.getRefreshToken();
-  if (refreshToken) {
+async function handleRawResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let detail = `请求失败: ${res.status}`;
     try {
-      await http.post("/api/v1/auth/logout", { refresh_token: refreshToken });
+      const body = await res.json();
+      detail = body.detail || detail;
     } catch {}
+    throw new Error(detail);
   }
-  tokenStore.clearTokens();
+  return res.json();
 }
+
+export const authApi = {
+  async login(data: LoginRequest): Promise<AuthResponse> {
+    const res = await httpClient.raw("/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const result = await handleRawResponse<AuthResponse>(res);
+    tokenStorage.setAccessToken(result.access_token);
+    tokenStorage.setRefreshToken(result.refresh_token);
+    return result;
+  },
+
+  async register(data: RegisterRequest): Promise<AuthResponse> {
+    const res = await httpClient.raw("/api/v1/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const result = await handleRawResponse<AuthResponse>(res);
+    tokenStorage.setAccessToken(result.access_token);
+    tokenStorage.setRefreshToken(result.refresh_token);
+    return result;
+  },
+
+  async refresh(): Promise<boolean> {
+    const refreshToken = tokenStorage.getRefreshToken();
+    if (!refreshToken) return false;
+    try {
+      const res = await httpClient.raw("/api/v1/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (!res.ok) {
+        tokenStorage.clear();
+        return false;
+      }
+      const data = await res.json();
+      tokenStorage.setAccessToken(data.access_token);
+      tokenStorage.setRefreshToken(data.refresh_token);
+      return true;
+    } catch {
+      tokenStorage.clear();
+      return false;
+    }
+  },
+
+  async logout(): Promise<void> {
+    const refreshToken = tokenStorage.getRefreshToken();
+    if (refreshToken) {
+      try {
+        await httpClient.post("/api/v1/auth/logout", {
+          refresh_token: refreshToken,
+        });
+      } catch {}
+    }
+    tokenStorage.clear();
+  },
+
+  async getMe(): Promise<AuthUser> {
+    const { data } = await httpClient.get<AuthUser>("/api/v1/auth/me");
+    return data;
+  },
+};
 ```
 
 - [ ] **步骤 2：提交**
 
 ```bash
 git add frontend/src/api/authApi.ts
-git commit -m "feat: add auth API layer based on unified HTTP client"
+git commit -m "feat: add authApi with login/register/refresh/logout/getMe"
 ```
 
 ---
 
-## 任务 15：前端 — useAuth Hook 和 AuthProvider
+## 任务 17：前端 — useAuth Hook 和 AuthProvider
 
 **涉及文件：**
 - 新建：`frontend/src/hooks/useAuth.tsx`
@@ -1353,7 +1611,7 @@ import {
   type ReactNode,
 } from "react";
 import type { AuthUser, LoginRequest, RegisterRequest } from "../types/auth";
-import * as authApi from "../api/authApi";
+import { authApi, tokenStorage } from "../api/authApi";
 
 interface AuthState {
   user: AuthUser | null;
@@ -1377,7 +1635,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    if (!authApi.tokenStore.hasToken()) {
+    if (!tokenStorage.hasToken()) {
       setState({ user: null, loading: false, initialized: true });
       return;
     }
@@ -1435,7 +1693,7 @@ git commit -m "feat: add AuthProvider context and useAuth hook"
 
 ---
 
-## 任务 16：前端 — 登录和注册页面
+## 任务 18：前端 — 登录和注册页面
 
 **涉及文件：**
 - 新建：`frontend/src/components/LoginPage.tsx`
@@ -1638,7 +1896,7 @@ git commit -m "feat: add login and register page components"
 
 ---
 
-## 任务 17：前端 — 接入认证到应用 + 改造 agentApi
+## 任务 19：前端 — 接入认证到应用 + 改造 agentApi
 
 **涉及文件：**
 - 修改：`frontend/src/main.tsx`
@@ -1742,76 +2000,205 @@ function ChatApp() {
 }
 ```
 
-- [ ] **步骤 3：改造 agentApi.ts — 使用 http 客户端**
+- [ ] **步骤 3：改造 agentApi.ts**
 
 改造思路：
-- 删除所有手动 `getAccessToken()` + 拼接 `Authorization` header 的代码
-- `getSessions`、`getMessages`、`deleteSession`、`stopChat` 用 `http.get/post/delete` 替代，认证和 401 刷新完全由 http 客户端自动处理
-- `submitSSETask` 用 `http.stream` 获取原始 Response（因为 SSE 需要自己读取流），认证自动注入
+- 删除 `API_BASE` 常量和所有手动 `fetch` 调用
+- 导入 `httpClient` 替代所有网络请求
+- `getSessions` / `getMessages` / `deleteSession` / `stopChat` 用 `httpClient.get/post/delete` 替代，认证和 401 刷新完全由拦截器自动处理
+- `submitSSETask` 用 `httpClient.stream` 发请求，响应自动经过拦截器管道（包含 401 刷新），不再需要手动 retry
 
-在 `frontend/src/api/agentApi.ts` 顶部替换原来的 import 和 `API_BASE`，添加：
-
-```typescript
-import { http, HttpException } from "./http";
-```
-
-删除 `const API_BASE = "http://localhost:4030";`。
-
-替换 `submitSSETask` 方法：
+完整替换 `frontend/src/api/agentApi.ts`：
 
 ```typescript
+import type {
+  SubmitRequest,
+  SSEEventData,
+  SSEEventHandler,
+  ChatSession,
+  ChatMessageFromDB,
+  ChatMessage,
+  AgentState,
+  NodeKey,
+  ResponseResult,
+} from "../types/agent";
+import { httpClient } from "./client";
+
+export interface AgentApi {
+  abort: AbortController;
+  submitSSETask: (
+    request: SubmitRequest,
+    events: SSEEventHandler,
+  ) => Promise<void>;
+  stopChat: (sessionId: string) => Promise<ResponseResult>;
+  dispatchEvent: (events: SSEEventHandler, response: Response) => Promise<void>;
+  getSessions: () => Promise<ChatSession[]>;
+  getMessages: (threadId: string) => Promise<ChatMessage[]>;
+  deleteSession: (threadId: string) => Promise<void>;
+}
+
+const NODE_KEYS = [
+  "supervisor", "search", "read", "analyze", "tag",
+  "knowledge", "review", "finalize",
+] as const;
+
+function extractNodeName(state: Record<string, unknown> | AgentState | null): string | null {
+  if (!state) return null;
+  for (const key of NODE_KEYS) {
+    if (key in state && (state as Record<string, unknown>)[key] !== null && typeof (state as Record<string, unknown>)[key] === "object") {
+      return key;
+    }
+  }
+  return null;
+}
+
+function flattenState(
+  state: Record<string, unknown> | AgentState | null,
+  nodeName: string | null,
+): AgentState | undefined {
+  if (!state || !nodeName) return undefined;
+  const s = state as Record<string, unknown>;
+  const nodeData = s[nodeName];
+  if (!nodeData || typeof nodeData !== "object") return undefined;
+  return { ...(nodeData as Record<string, unknown>), session_id: s.session_id ?? "" } as unknown as AgentState;
+}
+
+function getNodeSummary(nodeName: string, nodeData: Record<string, unknown>): string {
+  switch (nodeName) {
+    case "search":
+      return `搜索完成，找到 ${(nodeData.search_results as unknown[])?.length ?? 0} 篇相关资料`;
+    case "read":
+      return `阅读完成，提取了 ${(nodeData.read_notes as unknown[])?.length ?? 0} 条笔记`;
+    case "analyze":
+      return "分析完成，已构建知识结构";
+    case "tag":
+      return "标签生成完成";
+    case "knowledge":
+      return "知识总结已生成";
+    case "review": {
+      const r = nodeData.review_result as { status: string } | undefined;
+      return r?.status === "pass" ? "审核通过" : r?.status === "need_human" ? "需要人工审核" : "审核建议修改";
+    }
+    case "finalize":
+      return (nodeData.final_answer as string) ?? "最终总结已生成";
+    default:
+      return "处理完成";
+  }
+}
+
+function parseMessages(rows: ChatMessageFromDB[]): ChatMessage[] {
+  return rows
+    .filter((r) => {
+      if (r.role === "human" || r.role === "user") return true;
+      const nodeName = r.node_name || extractNodeName(r.state);
+      return nodeName !== "supervisor";
+    })
+    .map((r) => {
+      const role: "human" | "ai" = (r.role === "user" || r.role === "human") ? "human" : "ai";
+      const nodeName = (r.node_name || extractNodeName(r.state)) as NodeKey | null;
+      const effectiveNodeName = nodeName === "chat" ? null : nodeName;
+      const flatState = flattenState(r.state, effectiveNodeName);
+
+      let content = r.content ?? "";
+      if (!content && effectiveNodeName && r.state) {
+        const state = r.state as Record<string, unknown>;
+        const nodeData = state[effectiveNodeName] as Record<string, unknown>;
+        content = effectiveNodeName === "finalize"
+          ? (nodeData?.final_answer as string) ?? ""
+          : nodeData ? getNodeSummary(effectiveNodeName, nodeData) : "";
+      }
+
+      return {
+        id: String(r.id),
+        role,
+        content,
+        state: flatState,
+        nodeName: effectiveNodeName ?? undefined,
+        timestamp: new Date(r.create_at).getTime(),
+      };
+    });
+}
+
+const realApi: AgentApi = {
+  abort: new AbortController(),
+  async submitSSETask(
+    request: SubmitRequest,
+    events: SSEEventHandler,
+  ): Promise<void> {
     agentApi.abort.abort();
     agentApi.abort = new AbortController();
-    const response = await http.stream("/chat/start", request, {
+    const response = await httpClient.stream("/chat/start", request, {
       signal: agentApi.abort.signal,
     });
-
-    if (response.status === 401) {
-      agentApi.abort = new AbortController();
-      const retryResponse = await http.stream("/chat/start", request, {
-        signal: agentApi.abort.signal,
-      });
-      await agentApi.dispatchEvent(events, retryResponse);
+    await agentApi.dispatchEvent(events, response);
+  },
+  async dispatchEvent(events: SSEEventHandler, response: Response) {
+    if (!response.ok || !response.body) {
+      events.onError?.(new Error(`请求失败: ${response.status}`));
       return;
     }
-```
 
-替换 `getSessions`：
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
 
-```typescript
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        events.onClose?.();
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data: ")) continue;
+        const payload = trimmed.slice(6);
+        if (payload === "[DONE]") {
+          events.onClose?.();
+          return;
+        }
+        try {
+          const parsed: SSEEventData = JSON.parse(payload);
+          events.onMessage?.(parsed);
+        } catch {
+          // skip non-JSON lines
+        }
+      }
+    }
+  },
+  async stopChat(session_id: string) {
+    agentApi.abort.abort();
+    const { data } = await httpClient.post<ResponseResult>(`/chat/${session_id}/stop`);
+    return data;
+  },
   async getSessions(): Promise<ChatSession[]> {
-    const { data } = await http.get<ChatSession[]>("/chat/sessions");
+    const { data } = await httpClient.get<ChatSession[]>("/chat/sessions");
     return (data as { result?: ChatSession[] }).result ?? data;
   },
-```
 
-替换 `getMessages`：
-
-```typescript
   async getMessages(threadId: string): Promise<ChatMessage[]> {
-    const { data } = await http.get<ChatMessage[]>(`/chat/${threadId}/messages`);
+    const { data } = await httpClient.get<ChatMessage[]>(`/chat/${threadId}/messages`);
     const rows: ChatMessageFromDB[] = (data as { result?: ChatMessageFromDB[] }).result ?? data;
     return parseMessages(rows);
   },
-```
 
-替换 `deleteSession`：
-
-```typescript
   async deleteSession(threadId: string): Promise<void> {
-    await http.delete(`/chat/${threadId}`);
+    await httpClient.delete(`/chat/${threadId}`);
   },
+};
+
+export const agentApi: AgentApi = realApi;
 ```
 
-替换 `stopChat`：
-
-```typescript
-  async stopChat(session_id: string) {
-    agentApi.abort.abort();
-    const { data } = await http.post(`/chat/${session_id}/stop`);
-    return data;
-  },
-```
+关键变更说明：
+- 导入 `httpClient` from `"./client"` 替代手动 `fetch` + `API_BASE`
+- `submitSSETask` 使用 `httpClient.stream()` — 该方法经过拦截器管道，401 自动刷新重试，无需手动判断和 retry
+- `stopChat` / `getSessions` / `getMessages` / `deleteSession` 全部使用 `httpClient` 的对应方法
+- 纯函数（`parseMessages`、`getNodeSummary` 等）和类型保持不变
 
 - [ ] **步骤 4：更新 SessionSidebar.tsx — 添加用户信息和登出按钮**
 
@@ -1831,7 +2218,7 @@ interface SessionSidebarProps {
 }
 ```
 
-在解构的 props 中加入 `userEmail` 和 `onLogout`，然后在 `</aside>` 结束标签前添加用户区域：
+在解构的 props 中加入 `userEmail` 和 `onLogout`，然后在 `</aside>` 结束标签前（`</div>` 之前）添加用户区域：
 
 ```tsx
         <div className="px-3 py-3 border-t border-white/30 mt-auto">
@@ -1851,12 +2238,12 @@ interface SessionSidebarProps {
 
 ```bash
 git add frontend/src/main.tsx frontend/src/App.tsx frontend/src/api/agentApi.ts frontend/src/components/SessionSidebar.tsx
-git commit -m "feat: wire auth into app, refactor agentApi to use unified HTTP client"
+git commit -m "feat: wire auth into app, refactor agentApi to use HttpClient"
 ```
 
 ---
 
-## 任务 15：端到端验证
+## 任务 20：端到端验证
 
 - [ ] **步骤 1：启动 Redis**
 
@@ -1905,7 +2292,13 @@ cd frontend && npm run dev
 3. 注册第二个用户
 4. 确认看不到第一个用户的任何会话
 
-- [ ] **步骤 8：提交修复（如有）**
+- [ ] **步骤 8：测试 token 过期自动刷新**
+
+1. 登录后，在浏览器 DevTools 的 Application > Local Storage 中手动修改 `access_token` 为一个无效值
+2. 发送一条聊天消息
+3. 预期：请求自动 401 → 拦截器自动刷新 → 重发成功，用户无感知
+
+- [ ] **步骤 9：提交修复（如有）**
 
 ```bash
 git add -A
