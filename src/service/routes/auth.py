@@ -177,6 +177,7 @@ async def refresh(body: RefreshRequest):
         return Result.un_authorized("令牌类型错误")
 
     stored = await adapter.get_refresh_token(body.refresh_token)
+
     if stored is None or stored.revoked:
         # 直接根据family_id吊销所有关联token
         if stored and stored.family_id:
@@ -280,7 +281,7 @@ async def generate_token(
 
     await adapter.store_refresh_token(
         RT(
-            token=access,
+            token=refresh_meta.token,
             user_id=user.id,
             expires_at=refresh_meta.expires_at,
             family_id=refresh_meta.family_id,
