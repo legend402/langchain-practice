@@ -256,7 +256,7 @@ async def public_key():
     ).decode()
     uuid = str(uuid4())
     ttl = 3600
-    await redis.set(f"rsa:key:${uuid}", private_pem, ex=ttl)
+    await redis.set(f"rsa:key:{uuid}", private_pem, ex=ttl)
 
     return Result.success({
         "public_key": public_pem,
