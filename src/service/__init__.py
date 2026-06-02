@@ -13,6 +13,7 @@ import os
 from src.agent.chat.create_agent import create_chat_agent
 from src.service.auth.auth import create_fullauth
 from src.service.db.database import engine, session_marker, init_db
+from src.service.db.redis import init_redis, close_redis, get_redis
 from src.service.error import register_error_handler
 from src.service.routes.chat import router as chat_router
 from src.service.routes.auth import router as auth_router
@@ -49,7 +50,11 @@ async def lifespan(app: FastAPI):
     fullauth = create_fullauth(session_marker=session_marker)
     app.state.fullauth = fullauth
 
+    await init_redis()
+    app.state.redis = get_redis()
+
     yield
+    await close_redis()
     await pool.close()
 
 
