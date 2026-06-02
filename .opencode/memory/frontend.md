@@ -47,6 +47,7 @@ frontend/src/
 │   │   ├── httpClient.ts    # HttpClient 类
 │   │   ├── tokenStorage.ts  # Token 存储抽象
 │   │   └── authInterceptors.ts  # 认证拦截器
+│   ├── passwordCrypto.ts  # RSA 密码加密（Web Crypto API，零依赖）
 │   ├── authApi.ts        # 认证 API
 │   └── agentApi.ts       # 聊天/Agent API
 └── types/

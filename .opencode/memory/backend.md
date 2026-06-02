@@ -10,6 +10,7 @@
    - 创建 Chat Agent → `app.state.agent`
    - 初始化数据库表 → `init_db(engine)`
    - 创建 FullAuth 实例 → `app.state.fullauth`
+   - 初始化 Redis 客户端 → `init_redis()` → `app.state.redis`
 4. 路由注册：`chat_router`（无前缀）、`auth_router`（前缀 `/api/v1`）
 
 ## 目录结构
@@ -23,7 +24,8 @@ src/service/
 │   └── validate_exception.py
 ├── db/
 │   ├── database.py      # AsyncEngine + session_maker + init_db
-│   └── db.py            # SQLModel 表定义（ChatSession, ChatMessage）
+│   ├── db.py            # SQLModel 表定义（ChatSession, ChatMessage）
+│   └── redis.py         # Redis 异步客户端单例 + init/close
 ├── controller/
 │   ├── ChatSession.py   # 会话 CRUD
 │   └── ChatMessage.py   # 消息 CRUD

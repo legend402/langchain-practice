@@ -44,16 +44,20 @@ research/
 
 ## 记忆文件引用
 
-| 文件 | 内容 |
-|------|------|
-| [后端架构](./.opencode/memory/backend.md) | 后端目录、启动流程、数据库、Result 规范 |
-| [Agent 系统](./.opencode/memory/agent.md) | Chat Agent、Research Agent、图拓扑、节点说明 |
-| [认证系统](./.opencode/memory/auth.md) | 前后端认证流程、token 管理、API 客户端 |
-| [前端架构](./.opencode/memory/frontend.md) | 路由、页面、组件、数据流 |
+> 按需加载：不要在会话开始时预读所有文件，而是根据当前任务的实际需要，读取对应的记忆文件。
+> 记忆文件内容视为强制指令，加载后必须遵守。
+
+| 文件 | 内容 | 何时加载 |
+|------|------|---------|
+| [后端架构](./.opencode/memory/backend.md) | 后端目录、启动流程、数据库、Result 规范 | 涉及后端代码、API 路由、数据库操作时 |
+| [Agent 系统](./.opencode/memory/agent.md) | Chat Agent、Research Agent、图拓扑、节点说明 | 涉及 Agent 逻辑、工具调用、LangGraph 时 |
+| [认证系统](./.opencode/memory/auth.md) | 前后端认证流程、token 管理、API 客户端 | 涉及登录、注册、token、权限相关时 |
+| [前端架构](./.opencode/memory/frontend.md) | 路由、页面、组件、数据流 | 涉及前端代码、页面、组件、路由时 |
 
 ## 代码规范
 
 - Git commit message 使用 Conventional Commits 规范，类型前缀用英文（feat/fix/refactor/docs/chore 等），描述用中文。示例：`feat: 添加用户登录功能`
+- Git 提交必须按功能分批次提交，不同功能的改动分开提交（如：前端加密逻辑、后端 Redis 基础设施、记忆文件更新各为独立提交），禁止将不相关的改动混在一个 commit 中
 - 定义函数必须添加函数注释，注释内容为函数的功能、参数、返回值等。注释必须使用中文
 - 后端所有 API 响应使用 `Result` 包装（见 [后端架构](./.opencode/memory/backend.md)）
 

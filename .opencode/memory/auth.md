@@ -39,6 +39,7 @@ CurrentUser = Annotated[AppUserSchema, Depends(current_user)]
 
 | 端点 | 认证 | 说明 |
 |------|------|------|
+| GET /auth/public-key | 无 | 获取 RSA 公钥，返回 `{ key_id, public_key(PEM), expires_at }` |
 | POST /auth/register | 无 | 注册，返回 access + refresh + user |
 | POST /auth/login | 无 | 登录（支持 email 或 user_name），登录失败返回 HTTP 200 + body.code=401 |
 | POST /auth/refresh | 无 | 刷新 token（验证 refresh token 有效性，吊销旧的，签发新的） |
@@ -46,6 +47,16 @@ CurrentUser = Annotated[AppUserSchema, Depends(current_user)]
 | GET /auth/me | 需认证 | 返回当前用户信息 |
 
 所有端点返回 `Result` 包装。
+
+### 密码加密传输（RSA-OAEP）
+
+login/register 的密码字段使用 RSA-OAEP + SHA-256 加密传输，防止明文暴露：
+- 后端启动时生成 RSA 2048 密钥对，`key_id` 用 UUID 标识
+- 私钥 PEM 序列化后存入 Redis（key: `rsa:key:{key_id}`），TTL 自动过期，多 worker 共享
+- 公钥 PEM 从私钥推导，无需单独存储
+- 前端通过 `GET /auth/public-key` 获取公钥，Web Crypto API 加密密码
+- 请求体中 `password` 字段为 base64 编码的 RSA 密文，附带 `key_id`
+- 后端根据 `key_id` 从 Redis 取私钥解密，得到明文后走原有 argon2id 验证逻辑
 
 ## 前端认证
 
@@ -76,12 +87,19 @@ ApiResult<T>      // { code, success, result, message }
 - 请求拦截器：注入 `Authorization: Bearer <token>`
 - 响应拦截器：401 → 尝试 refresh → 重发原始请求（带并发去重）
 
+### 密码加密（`frontend/src/api/passwordCrypto.ts`）
+
+`encryptPassword(password)` — 使用 Web Crypto API（零依赖）：
+- `fetchPublicKey()`：从后端获取 RSA 公钥，内存缓存，过期前 5 分钟自动刷新
+- 用 `httpClient.raw()` 发起请求，复用 URL 解析
+- 返回 `{ encrypted: string(base64密文), key_id: string }`
+
 ### Auth API（`frontend/src/api/authApi.ts`）
 
 | 方法 | HTTP 方法 | 使用方式 |
 |------|-----------|----------|
-| `login(data)` | POST /auth/login | `raw()`（无 token） |
-| `register(data)` | POST /auth/register | `raw()`（无 token） |
+| `login(data)` | POST /auth/login | `raw()` + RSA 加密密码 |
+| `register(data)` | POST /auth/register | `raw()` + RSA 加密密码 |
 | `refresh()` | POST /auth/refresh | `raw()`（避免循环刷新） |
 | `logout()` | POST /auth/logout | `post()`（经过拦截器） |
 | `getMe()` | GET /auth/me | `get()`（经过拦截器） |
