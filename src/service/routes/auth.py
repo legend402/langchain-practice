@@ -1,8 +1,14 @@
+import base64
+import time
+from uuid import uuid4
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, padding as asym_padding
 from fastapi import APIRouter
 from fastapi_fullauth import CreateUserSchema, FullAuth, UserSchema
 from pydantic import BaseModel, EmailStr
 
 from src.service.auth.deps import CurrentUser
+from src.service.db.redis import get_redis
 from src.service.result import Result
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -11,12 +17,14 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class LoginRequest(BaseModel):
     login: str
     password: str
+    key_id: str
 
 
 class RegisterRequest(BaseModel):
     email: EmailStr
     user_name: str
     password: str
+    key_id: str
 
 
 class RefreshRequest(BaseModel):
@@ -35,13 +43,34 @@ def _get_fullauth() -> FullAuth[UserSchema, CreateUserSchema]:
 
 @router.post("/register")
 async def register(body: RegisterRequest):
+    # 解密密码
+    redis = get_redis()
+    private_pem = await redis.get(f"rsa:key:{body.key_id}")
+    if not private_pem:
+        return Result.error("密钥已过期，请刷新页面")
+    
+    private_key = serialization.load_pem_private_key(
+        private_pem.encode(), password=None
+    )
+    try:
+        password = private_key.decrypt(
+            base64.b64decode(body.password),
+            asym_padding.OAEP(
+                mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        ).decode()
+    except:
+        return Result.error("密码解密失败")
+
     fullauth = _get_fullauth()
     adapter = fullauth.adapter
 
     from fastapi_fullauth.flows.register import register as do_register
 
     schema = adapter._create_user_schema(
-        email=body.email, password=body.password, user_name=body.user_name
+        email=body.email, password=password, user_name=body.user_name
     )
     user = await do_register(
         adapter=adapter,
@@ -72,6 +101,27 @@ async def register(body: RegisterRequest):
 
 @router.post("/login")
 async def login(body: LoginRequest):
+    # 解密密码
+    redis = get_redis()
+    private_pem = await redis.get(f"rsa:key:{body.key_id}")
+    if not private_pem:
+        return Result.error("密钥已过期，请刷新页面")
+    
+    private_key = serialization.load_pem_private_key(
+        private_pem.encode(), password=None
+    )
+    try:
+        password = private_key.decrypt(
+            base64.b64decode(body.password),
+            asym_padding.OAEP(
+                mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        ).decode()
+    except:
+        return Result.error("密码解密失败")
+    
     fullauth = _get_fullauth()
     adapter = fullauth.adapter
 
@@ -87,7 +137,7 @@ async def login(body: LoginRequest):
 
     from fastapi_fullauth.core.crypto import verify_password
 
-    if not verify_password(body.password, hashed):
+    if not verify_password(password, hashed):
         return Result.un_authorized("用户名或密码错误")
 
     if not user.is_active:
@@ -170,6 +220,48 @@ def me(user: CurrentUser):
         }
     )
 
+@router.get("/public-key")
+async def public_key():
+    redis = get_redis()
+    # 遍历已有的密钥，找到未过期的直接返回
+    async for key in redis.scan_iter("rsa:key:*"):
+        ttl = await redis.ttl(key)
+        if ttl and ttl > 300: 
+            key_id = key.split(":")[-1]
+            private_pem = await redis.get(key)
+            private_key = serialization.load_pem_private_key(
+                private_pem.encode(), password=None
+            )
+            public_pem = private_key.public_key().public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            return Result.success({
+                "public_key": public_pem,
+                "key_id": key_id,
+                "expires_at": int(time.time()) + ttl,
+            })
+    # 生成密钥对
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+    public_pem = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode()
+    uuid = str(uuid4())
+    ttl = 3600
+    await redis.set(f"rsa:key:${uuid}", private_pem, ex=ttl)
+
+    return Result.success({
+        "public_key": public_pem,
+        "key_id": uuid,
+        "expired_at": int(time.time()) + ttl
+    })
 
 async def generate_token(
     fullauth: FullAuth[UserSchema, CreateUserSchema], user: UserSchema
