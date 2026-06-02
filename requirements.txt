@@ -17,3 +17,6 @@ alembic
 asyncpg
 greenlet
 fastapi-fullauth[sqlmodel,redis]
+beautifulsoup4
+lxml
+python-docx
