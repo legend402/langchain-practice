@@ -6,6 +6,7 @@ import type {
   RegisterRequest,
   ApiResult,
 } from "../types/auth";
+import { encryptPassword } from "./passwordCrypto";
 
 export { tokenStorage };
 
@@ -25,13 +26,20 @@ async function handleRawResult<T>(res: Response): Promise<T> {
 
 export const authApi = {
   /**
-   * 登录，支持邮箱或用户名
+   * 用户登录
+   *
+   * 支持邮箱或用户名登录。密码在传输前使用 RSA-OAEP 加密，
+   * 使用 httpClient.raw() 绕过拦截器（登录时无 token）。
+   *
+   * @param data - 登录请求，包含 login（邮箱或用户名）和 password（明文密码）
+   * @returns 认证响应，包含 access_token、refresh_token 和用户信息
    */
   async login(data: LoginRequest): Promise<AuthResponse> {
+    const { encrypted, key_id } = await encryptPassword(data.password);
     const res = await httpClient.raw("/api/v1/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ login: data.login, password: encrypted, key_id }),
     });
     const result = await handleRawResult<AuthResponse>(res);
     tokenStorage.setAccessToken(result.access_token);
@@ -41,12 +49,24 @@ export const authApi = {
 
   /**
    * 注册新用户
+   *
+   * 密码在传输前使用 RSA-OAEP 加密，
+   * 使用 httpClient.raw() 绕过拦截器（注册时无 token）。
+   *
+   * @param data - 注册请求，包含 email、user_name 和 password（明文密码）
+   * @returns 认证响应，包含 access_token、refresh_token 和用户信息
    */
   async register(data: RegisterRequest): Promise<AuthResponse> {
+    const { encrypted, key_id } = await encryptPassword(data.password);
     const res = await httpClient.raw("/api/v1/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        email: data.email,
+        user_name: data.user_name,
+        password: encrypted,
+        key_id,
+      }),
     });
     const result = await handleRawResult<AuthResponse>(res);
     tokenStorage.setAccessToken(result.access_token);

@@ -1,5 +1,6 @@
 import type { TokenStorage } from "./tokenStorage";
 import type { RequestInterceptor, ResponseInterceptor } from "./httpClient";
+import { httpClient } from ".";
 
 /**
  * 创建认证拦截器：请求拦截器注入 Bearer token，响应拦截器处理 401 自动刷新
@@ -18,7 +19,7 @@ export function createAuthInterceptors(tokenStorage: TokenStorage): {
     const refreshToken = tokenStorage.getRefreshToken();
     if (!refreshToken) return false;
     try {
-      const res = await fetch("http://localhost:4030/api/v1/auth/refresh", {
+      const res = await httpClient.raw("/api/v1/auth/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken }),
