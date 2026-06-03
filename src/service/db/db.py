@@ -42,7 +42,7 @@ class FileUpload(SQLModel, table=True):
     file_path: str
     file_format: str
     file_size: int
-    create_at: datetime = Field(default_factory=datetime.now())
+    create_at: datetime = Field(default_factory=datetime.now)
 
 class KnowledgeEntry(SQLModel, table=True):
     id: Optional[str] = Field(default_factory=lambda: str(uuid4()), primary_key=True)
@@ -52,4 +52,4 @@ class KnowledgeEntry(SQLModel, table=True):
     source_id: Optional[str] = None
     chunk_count: int = 0
     content_preview: Optional[str] = None
-    create_at: datetime = Field(default_factory=datetime.now())
+    create_at: datetime = Field(default_factory=datetime.now)
