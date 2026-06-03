@@ -1,3 +1,4 @@
+from contextvars import ContextVar
 from pydantic import BaseModel
 from src.config import AgentState
 
@@ -140,3 +141,18 @@ def recover_state(messages: list[dict]):
                 + [("ai", get_state_message(node_name, node_state))],
             }
     return state
+
+_current_user_id: ContextVar[str | None] = ContextVar("current_user_id", default=None)
+
+def set_current_user_id(user_id: str | None) -> None:
+    """
+    设置当前请求的用户 ID（协程安全）。
+    基于 contextvars 实现，每个异步请求有独立的上下文。
+    """
+    _current_user_id.set(user_id)
+
+def get_current_user_id() -> str | None:
+    """
+    获取当前请求的用户 ID。
+    """
+    return _current_user_id.get()
