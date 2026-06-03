@@ -100,5 +100,5 @@ def delete_entry_chunks(user_id: str, entry_id: str) -> None:
     return
   client.delete(
     collection_name=col_name,
-    filter=f"entry_id == {entry_id}"
+    filter=f"entry_id == '{entry_id}'"
   )

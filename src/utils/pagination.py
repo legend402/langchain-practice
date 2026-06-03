@@ -14,17 +14,17 @@ class PaginatedResult(Generic[T]):
   total: int
   page: int
   size: int
+  pages: int = 0
+
+  def __post_init__(self):
+    self.pages = max(1, -(-self.total // self.size))
 
   @property
-  def total_pages(self) -> int:
-    return max(1, -(-self.total // self.size))
-  
-  @property
   def has_next(self) -> bool:
-    return self.page < self.total_pages
-  
+    return self.page < self.pages
+
   @property
-  def has_prev(self):
+  def has_prev(self) -> bool:
     return self.page > 1
   
 async def pagination(
@@ -34,7 +34,7 @@ async def pagination(
   user_id: object = None,
   page: int = 1,
   size: int = 20,
-  order_attr: str = " create_at",
+  order_attr: str = "create_at",
   descending: bool = True,
   extra_filter: object | None = None
 ) -> PaginatedResult[T]:
