@@ -115,6 +115,7 @@ export interface AgentState {
 export interface SubmitRequest {
   query: string;
   thread_id?: string;
+  file_ids?: string[];
 }
 
 export interface ChatSession {
