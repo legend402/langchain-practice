@@ -72,19 +72,21 @@ def get_or_create_collection(user_id: str) -> str:
 
   client.create_collection(collection_name=col_name, schema=schema)
 
-  client.create_index(
-    collection_name=col_name,
+  index_params = client.prepare_index_params()
+  index_params.add_index(
     field_name="dense_vector",
-    index_params={"index_type": "AUTOINDEX", "metric_type": "IP"}
+    index_type="AUTOINDEX",
+    metric_type="IP",
+  )
+  index_params.add_index(
+    field_name="sparse_vector",
+    index_type="SPARSE_INVERTED_INDEX",
+    metric_type="BM25",
+    params={"inverted_index_algo": "DAAT_MAXSCORE"},
   )
   client.create_index(
     collection_name=col_name,
-    field_name="sparse_vector",
-    index_params={
-      "index_type": "SPARSE_INVERTED_INDEX",
-      "metric_type": "BM25",
-      "params": {"inverted_index_algo": "DAAT_MAXSCORE"},
-    },
+    index_params=index_params,
   )
   client.load_collection(col_name)
 
