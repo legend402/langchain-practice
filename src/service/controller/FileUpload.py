@@ -54,7 +54,7 @@ async def upload_file(
   )
   session.add(record)
   await session.commit()
-  await session.refresh()
+  await session.refresh(record)
   return record
 
 async def get_file_record(session: AsyncSession, file_id: str) -> FileUpload | None:

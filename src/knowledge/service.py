@@ -73,7 +73,7 @@ async def save_entry(
   )
   session.add(entry),
   await session.commit()
-  await session.refresh()
+  await session.refresh(entry)
   return entry
 
 async def delete_entry(
