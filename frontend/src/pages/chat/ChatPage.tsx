@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { useAgentChat } from "../../hooks/useAgentChat";
+import type { FileUpload } from "../../types/knowledge";
 
 import SearchForm from "../../components/SearchForm";
 import MessageList from "../../components/MessageList";
@@ -11,6 +13,33 @@ import SessionSidebar from "../../components/SessionSidebar";
 export default function ChatPage() {
   const chat = useAgentChat();
   const auth = useAuth();
+  const [attachments, setAttachments] = useState<FileUpload[]>([]);
+
+  /**
+   * 添加文件附件
+   * @param file - 文件上传记录
+   */
+  function handleAddAttachment(file: FileUpload) {
+    setAttachments((prev) => [...prev, file]);
+  }
+
+  /**
+   * 移除文件附件
+   * @param fileId - 文件 ID
+   */
+  function handleRemoveAttachment(fileId: string) {
+    setAttachments((prev) => prev.filter((f) => f.id !== fileId));
+  }
+
+  /**
+   * 提交消息并附带文件 ID
+   * @param query - 用户输入的查询内容
+   */
+  async function handleSubmit(query: string) {
+    const fileIds = attachments.length > 0 ? attachments.map((f) => f.id) : undefined;
+    setAttachments([]);
+    await chat.submit(query, fileIds);
+  }
 
   return (
     <div className="h-screen flex">
@@ -42,7 +71,14 @@ export default function ChatPage() {
             activeNode={chat.activeNode}
           />
           <div className="shrink-0 pb-4 pt-0 space-y-3">
-            <SearchForm onSubmit={chat.submit} onStop={chat.stop} loading={chat.loading} />
+            <SearchForm
+              onSubmit={handleSubmit}
+              onStop={chat.stop}
+              loading={chat.loading}
+              attachments={attachments}
+              onAddAttachment={handleAddAttachment}
+              onRemoveAttachment={handleRemoveAttachment}
+            />
           </div>
         </main>
       </div>

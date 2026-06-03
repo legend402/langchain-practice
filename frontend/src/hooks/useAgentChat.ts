@@ -290,7 +290,7 @@ export function useAgentChat() {
   }, [addMessage, stateRef]);
 
   const submit = useCallback(
-    async (query: string) => {
+    async (query: string, fileIds?: string[]) => {
       const userMsg: ChatMessage = {
         id: uuid(),
         role: "human",
@@ -305,7 +305,7 @@ export function useAgentChat() {
 
       try {
         let sessionRefreshed = false;
-        await agentApi.submitSSETask({ query, thread_id: activeThreadId ?? undefined }, {
+        await agentApi.submitSSETask({ query, thread_id: activeThreadId ?? undefined, file_ids: fileIds }, {
           onMessage: (event: SSEEventData) => {
             handleMessage(event);
 
