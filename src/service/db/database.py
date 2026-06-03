@@ -2,7 +2,7 @@ import os
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
-from src.service.db.db import ChatMessage, ChatSession
+from src.service.db.db import ChatMessage, ChatSession, FileUpload, KnowledgeEntry
 
 def create_engine(db_uri: str) -> AsyncEngine:
   async_uri = db_uri.replace("postgresql://", "postgresql+asyncpg://")
