@@ -3,7 +3,7 @@
 ## 架构概览
 
 两级 Agent 架构：
-1. **Chat Agent**（`src/agent/chat/`）— 简单 ReAct，可直接回答或调用 research 工具
+1. **Chat Agent**（`src/agent/chat/`）— 简单 ReAct，可直接回答或调用 research / 知识库工具
 2. **Research Agent**（`src/agent/research/`）— 多步状态机，supervisor 协调多个 worker 节点
 
 research 工具（`src/tools/research.py`）作为桥梁：Chat LLM 调用 `@tool research()`，内部创建并运行完整的 research 图。
@@ -15,28 +15,41 @@ research 工具（`src/tools/research.py`）作为桥梁：Chat LLM 调用 `@too
 ### 状态（`config.py`）
 
 ```python
-class ChatState(TypedDict):
+class ChatState(TypedDict, total=False):
     messages: Annotated[list[BaseMessage], add_messages]
     user_query: str
     research_result: Optional[str]
     research_active: bool
+    file_ids: Optional[list[str]]
 ```
+
+`file_ids` 字段用于传递用户上传的附件 ID。`get_initial_chat_state` 处理 file_ids 时会追加系统提示消息告知 Agent 有附件。
 
 ### 图拓扑（`create_agent.py`）
 
 ```
 START → chat → [有工具调用] → tools → chat → END
-              → [无工具调用] → END
+               → [无工具调用] → END
 ```
 
-- `chat` 节点：LLM + 绑定 `[research]` 工具
-- `tools` 节点：LangGraph `ToolNode`
+- `chat` 节点：LLM + 绑定 `[research, knowledge_search, read_file, save_to_knowledge]` 工具
+- `tools` 节点：LangGraph `ToolNode`，包含全部 4 个工具
 - 工具调用条件：`tools_condition`（有 tool_calls → tools，否则 → END）
 
 ### 聊天节点（`nodes/chat.py`）
 
-- 系统提示词决定是否触发 research：摘要、分析、深度研究、`/research` 前缀、多源综合
-- 不触发：简单问答、聊天、基于已有知识的解释
+系统提示词定义 5 种能力：
+1. 直接回答简单问题
+2. 调用 `knowledge_search` 检索已有知识库
+3. 调用 `research` 进行深度研究
+4. 调用 `read_file` 读取用户附件
+5. 调用 `save_to_knowledge` 将内容存入知识库
+
+路由规则：
+- 有附件时必须先 `read_file`
+- 用户说"存入知识库"等意图时调用 `save_to_knowledge`
+- 非简单问题优先 `knowledge_search`
+- `knowledge_search` 无结果且需深度研究时才调用 `research`
 
 ## Research Agent
 
@@ -99,11 +112,21 @@ START → supervisor
 
 ## 工具（`src/tools/`）
 
-| 工具 | 说明 |
-|------|------|
-| `research` | 桥接 chat → research agent 的 LangChain @tool |
-| `web_search` | Tavily 搜索（query, max_results=5） |
-| `web_fetch` | Tavily 批量 URL 内容提取（urls: list[str]） |
+| 工具 | 文件 | 说明 |
+|------|------|------|
+| `research` | `research.py` | 桥接 chat → research agent 的 LangChain @tool |
+| `web_search` | `web_search.py` | Tavily 搜索（query, max_results=5） |
+| `web_fetch` | `web_fetch.py` | Tavily 批量 URL 内容提取（urls: list[str]） |
+| `knowledge_search` | `knowledge_search.py` | 知识库检索工具，通过 contextvars 获取 user_id |
+| `read_file` | `read_file.py` | 根据 file_id 从 DB 查文件路径并读取内容 |
+| `save_to_knowledge` | `save_to_knowledge.py` | 将 title + content 存入用户知识库 |
+
+## 用户上下文传递（`src/utils/agent.py`）
+
+通过 `contextvars` 实现协程安全的 user_id 注入：
+- `_current_user_id: ContextVar[str | None]`
+- `set_current_user_id(user_id)` — 在 chat 路由中调用
+- `get_current_user_id()` — 在工具函数中调用
 
 ## LLM 配置（`src/llm.py`）
 

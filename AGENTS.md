@@ -6,8 +6,10 @@
 
 知识研究助手（Knowledge Research Agent），FastAPI 后端 + React 前端 SPA。
 - 后端：LangGraph 多步研究 Agent + FastAPI SSE 流式输出 + JWT 认证
-- 前端：React 19 + react-router-dom v7 + Tailwind CSS v4 + 自建 HTTP 客户端
+- 前端：React 19 + react-router-dom v7 + Tailwind CSS v4 + @headlessui/react + 自建 HTTP 客户端
 - 数据库：PostgreSQL（SQLModel ORM + LangGraph Checkpoint）
+- 向量库：Milvus（dense IP + BM25 sparse 混合检索，RRF 融合排序）
+- Embedding：ZhipuAI embedding-3（2048 维）
 - 搜索：Tavily API（web_search + web_fetch）
 - 认证：fastapi-fullauth（JWT + Redis 黑名单/限流）
 
@@ -19,6 +21,12 @@ research/
 │   ├── agent/                  # Agent 系统
 │   │   ├── chat/               # 聊天 Agent（简单 ReAct）
 │   │   └── research/           # 研究 Agent（多步状态机）
+│   ├── knowledge/              # 知识库引擎
+│   │   ├── embedding.py        # ZhipuAI Embedding 单例
+│   │   ├── chunker.py          # 递归字符分块器
+│   │   ├── milvus.py           # Milvus 客户端 + Collection 管理
+│   │   ├── search.py           # 混合检索（dense + BM25 → RRF）
+│   │   └── service.py          # 知识库业务服务
 │   ├── service/                # FastAPI 服务层
 │   │   ├── auth/               # 认证配置和模型
 │   │   ├── controller/         # 业务逻辑
@@ -35,7 +43,7 @@ research/
 │       ├── components/         # 可复用 UI 组件
 │       ├── hooks/              # React 钩子
 │       ├── layouts/            # 布局组件
-│       ├── pages/              # 页面组件（auth/, chat/）
+│       ├── pages/              # 页面组件（auth/, chat/, knowledge/）
 │       ├── routes/             # 路由配置和守卫
 │       └── types/              # TypeScript 类型
 ├── docs/                       # 文档
@@ -71,6 +79,7 @@ research/
 - 后端服务：`http://localhost:4030`
 - 前端开发：`http://localhost:5173`（Vite 默认）
 - PostgreSQL：通过 `PGSQL_DB_URI` 环境变量配置
+- Milvus：通过 `MILVUS_URI` 环境变量配置（默认 `http://localhost:19530`）
 - Redis：`redis://localhost:6379/0`（默认）
 
 ## 环境变量
@@ -81,3 +90,6 @@ research/
 - `FULLAUTH_SECRET_KEY` — JWT 签名密钥（>=32 字节，必须固定）
 - `PGSQL_DB_URI` — PostgreSQL 连接串
 - `REDIS_URL` — Redis 地址
+- `MILVUS_URI` — Milvus 地址（默认 http://localhost:19530）
+- `ZHIPU_API_KEY` — 智谱 Embedding API 密钥
+- `UPLOAD_DIR` — 文件上传目录（默认 ./uploads）
