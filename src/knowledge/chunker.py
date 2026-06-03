@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
@@ -6,7 +7,7 @@ class Chunk:
   text: str
   index: str
 
-def chunk_text(content: str, title: str, chunk_size: 800, overlap: 200) -> list[Chunk]:
+def chunk_text(content: str, title: str, chunk_size: Optional[int] = 800, overlap: Optional[int] = 200) -> list[Chunk]:
   """
     递归字符分块器。
     将 title + content 按段落、行、字符优先级分割，每个 chunk 开头拼接 title。
@@ -47,7 +48,6 @@ def _recursive_split(text: str, chunk_size: int, overlap: int, chunks: list[str]
 def _merge_parts(parts: list[str], sep: str, chunk_size: int, overlap: int, chunks: list[str]):
   """
     将分割后的段落合并为不超过 chunk_size 的块。
-    块之间保留 overlap 字符的重叠。
   """
   current = ""
   for part in parts:
@@ -56,17 +56,11 @@ def _merge_parts(parts: list[str], sep: str, chunk_size: int, overlap: int, chun
           current = candidate
       else:
           if current:
-              _recursive_split(current, chunk_size, overlap, chunks)
-              overlap_text = current[-overlap:] if overlap < len(current) else current
-              current = overlap_text + sep + part
-          else:
-              current = part
+              chunks.append(current)
+          current = part
           if len(current) > chunk_size:
               _recursive_split(current, chunk_size, overlap, chunks)
-              last_chunk = chunks[-1] if chunks else ""
-              current = last_chunk[-overlap:] if overlap < len(last_chunk) else last_chunk
-              if not current:
-                  current = part
+              current = ""
   if current and len(current) <= chunk_size:
       chunks.append(current)
   elif current:
