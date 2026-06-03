@@ -6,6 +6,7 @@ import AppLayout from "../layouts/AppLayout";
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import ChatPage from "../pages/chat/ChatPage";
+import KnowledgePage from "../pages/knowledge/KnowledgePage";
 import NotFound from "../pages/NotFound";
 
 /**
@@ -29,7 +30,10 @@ export const router = createBrowserRouter([
     children: [
       {
         element: <AppLayout />,
-        children: [{ path: "/", element: <ChatPage /> }],
+        children: [
+          { path: "/", element: <ChatPage /> },
+          { path: "/knowledge", element: <KnowledgePage /> },
+        ],
       },
     ],
   },

@@ -1,4 +1,5 @@
-import { MessageSquarePlus, Trash2, PanelLeftClose, PanelLeft } from "lucide-react";
+import { MessageSquarePlus, Trash2, PanelLeftClose, PanelLeft, BookOpen } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
 import type { ChatSession } from "../types/agent";
 
 interface SessionSidebarProps {
@@ -32,6 +33,10 @@ export default function SessionSidebar({
   userEmail,
   onLogout,
 }: SessionSidebarProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isKnowledgeActive = location.pathname === "/knowledge";
+
   return (
     <>
       {!collapsed && (
@@ -61,6 +66,18 @@ export default function SessionSidebar({
               <PanelLeftClose className="w-[18px] h-[18px]" />
             </button>
           </div>
+        </div>
+
+        <div className="px-2 pb-2">
+          <button
+            onClick={() => navigate("/knowledge")}
+            className={`sidebar-item w-full flex items-center gap-2 ${
+              isKnowledgeActive ? "active" : ""
+            }`}
+          >
+            <BookOpen className="w-4 h-4 shrink-0" />
+            <span className="text-sm text-ink-100">知识库</span>
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-3 sidebar-content">
