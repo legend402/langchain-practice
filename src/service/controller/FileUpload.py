@@ -10,7 +10,10 @@ from src.service.db.db import FileUpload
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
 ALLOWED_EXTENSIONS = {".txt", ".md", ".markdown", ".html", ".htm", ".docx", ".doc", ".pdf"}
 
-def _ensure_upload_dir() -> None:
+def ensure_upload_dir() -> None:
+  """
+    确保 uploads 目录存在。
+  """
   os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 async def upload_file(
@@ -29,7 +32,7 @@ async def upload_file(
     返回:
         FileUpload 数据库记录
   """
-  _ensure_upload_dir()
+  ensure_upload_dir()
   ext = os.path.splitext(file_name)[1].lower()
   if ext not in ALLOWED_EXTENSIONS:
     raise ValueError(f"不支持的文件格式: {ext}")

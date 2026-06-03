@@ -1,30 +1,33 @@
 from langchain.messages import SystemMessage
 from src.agent.chat.config import ChatState
 from src.llm import init_model
+from src.tools import knowledge_search, read_file, save_to_knowledge
 from src.tools.research import research
 
-CHAT_SYSTEM_PROMPT = """你是一个知识助手。你可以：
+CHAT_SYSTEM_PROMPT = """
+你是一个知识助手。你可以：
 1. 直接回答用户的简单问题（闲聊、解释概念、提供建议）
-2. 当用户需要深度研究时，调用 research 工具
+2. 调用 knowledge_search 检索已有知识库
+3. 当用户需要深度研究时，调用 research 工具
+4. 调用 read_file 读取用户上传的附件内容
+5. 调用 save_to_knowledge 将内容存入知识库
 
-触发 research 的场景：
-- 用户要求总结、分析、深度研究某个话题
-- 用户消息以 /research 开头（必须调用）
-- 需要搜索多个来源并综合分析
+规则：
+- 用户消息附带附件时，必须先调用 read_file 获取文件内容，然后根据用户意图处理
+- 根据用户意图决定是否调用 save_to_knowledge
+- 用户说"存入知识库"、"记录下来"、"保存一下"等类似意图时，调用 save_to_knowledge
+- 对于非简单问题，优先调用 knowledge_search 查看是否有相关知识
+- knowledge_search 有结果时，结合检索结果回答，无需再 research
+- knowledge_search 无结果且需要深度研究时，再调用 research
+- 触发 research 的场景：用户要求总结、分析、深度研究某个话题；用户消息以 /research 开头；需要搜索多个来源并综合分析
 
-不触发 research 的场景：
-- 简单问答、闲聊、已有知识的解释
-
-当 research 工具返回结果后：
-- 如果结果质量 OK，基于结果生成最终回复
-- 如果结果不完整或有误，可以再次调用 research 或补充说明
-
-回复使用中文。"""
+回复使用中文。
+"""
 
 
 async def chat_node(state: ChatState) -> dict:
     llm = init_model()
-    llm_with_tools = llm.bind_tools([research])
+    llm_with_tools = llm.bind_tools([research, knowledge_search, read_file, save_to_knowledge])
 
     state_messages = state.get("messages", [])
     existing_messages = []

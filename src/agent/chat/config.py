@@ -10,9 +10,16 @@ class ChatState(TypedDict, total=False):
     user_query: str
     research_result: Optional[str]
     research_active: bool
+    file_ids: Optional[list[str]]
 
 
 def get_initial_chat_state(state: ChatState):
+    messages = state.get("messages", [])
+    if state.get("user_query"):
+        messages = [HumanMessage(state.get("user_query"))]
+    if state.get("file_ids"):
+        messages.append(f"[系统提示：用户上传了附件，file_id 为 {", ".join(state.get("file_ids"))}]")
+
     initial_state: ChatState = {
         "user_query": state.get("user_query", ""),
         "messages": (
@@ -26,6 +33,7 @@ def get_initial_chat_state(state: ChatState):
         ),
         "research_active": state.get("research_active", False),
         "research_result": state.get("research_result", ""),
+        "file_ids": state.get("file_ids", None),
     }
     return initial_state
 

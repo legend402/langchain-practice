@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select, delete
 
-from src.agent.chat.config import recover_chat_state
+from src.agent.chat.config import get_initial_chat_state, recover_chat_state
 from src.service.auth.deps import CurrentUser
 from src.service.controller.ChatMessage import create_message, get_messages
 from src.service.controller.ChatSession import create_session
@@ -16,7 +16,6 @@ from src.service.db.database import get_session, engine
 from src.service.db.db import ChatSession, ChatMessage
 from src.service.result import Result
 from src.service.routes.sse import event_generator
-from src.utils.agent import get_initial_state, recover_state
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -24,6 +23,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 class ChatStart(BaseModel):
     query: str
     thread_id: Optional[str] = None
+    file_ids: Optional[list[str]] = None
 
 
 class ChatFeedback(BaseModel):
@@ -67,24 +67,26 @@ async def chat_start(body: ChatStart, user: CurrentUser, session: AsyncSession =
     agent = app.state.agent
     thread_id = body.thread_id or str(uuid4())
 
-    state = {"user_query": body.query}
+    state = {
+        "user_query": body.query,
+        "file_ids": body.file_ids,
+    }
     # 如果没有会话记录，就创建新的记录
     if body.thread_id is None:
         await create_session(
             session=session, thread_id=thread_id, title=body.query[:50], user_id=user.id
         )
-    # 如果存在记录，就获取完整的记录，然后重新把记录传回get_initial_state，恢复上下文
+    # 如果存在记录，就获取完整的记录，然后重新把记录传回get_initial_chat_state，恢复上下文
     elif session.get(ChatSession, thread_id):
         messages = await get_messages(session, thread_id)
-        state = recover_chat_state(messages)
-        state["messages"] = state["messages"] + [("human", body.query)]
+        state["messages"] = recover_chat_state(messages)["messages"]
 
     await create_message(
         session=session, thread_id=thread_id, role="human", content=body.query
     )
     await session.commit()
 
-    initial_state = get_initial_state(state)
+    initial_state = get_initial_chat_state(state)
 
     return StreamingResponse(
         event_generator(

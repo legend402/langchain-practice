@@ -11,12 +11,16 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 import os
 
 from src.agent.chat.create_agent import create_chat_agent
+from src.knowledge.milvus import get_milvus_client
 from src.service.auth.auth import create_fullauth
+from src.service.controller.FileUpload import ensure_upload_dir
 from src.service.db.database import engine, session_marker, init_db
 from src.service.db.redis import init_redis, close_redis, get_redis
 from src.service.error import register_error_handler
 from src.service.routes.chat import router as chat_router
 from src.service.routes.auth import router as auth_router
+from src.service.routes.upload import router as upload_router
+from src.service.routes.knowledge import router as knowledge_router
 
 load_dotenv()
 
@@ -53,6 +57,9 @@ async def lifespan(app: FastAPI):
     await init_redis()
     app.state.redis = get_redis()
 
+    get_milvus_client()
+    ensure_upload_dir()
+
     yield
     await close_redis()
     await pool.close()
@@ -71,6 +78,8 @@ def create_agent_service():
         allow_headers=["*"],
     )
     app.include_router(chat_router)
+    app.include_router(upload_router)
+    app.include_router(knowledge_router)
     app.include_router(auth_router, prefix="/api/v1")
     return app
 
