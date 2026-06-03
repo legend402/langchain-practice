@@ -20,3 +20,6 @@ fastapi-fullauth[sqlmodel,redis]
 beautifulsoup4
 lxml
 python-docx
+pymilvus
+charset-normalizer
+PyPDF2
