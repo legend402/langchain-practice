@@ -16,6 +16,7 @@ from src.service.db.database import get_session, engine
 from src.service.db.db import ChatSession, ChatMessage
 from src.service.result import Result
 from src.service.routes.sse import event_generator
+from src.utils.agent import set_current_user_id
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -87,7 +88,8 @@ async def chat_start(body: ChatStart, user: CurrentUser, session: AsyncSession =
     await session.commit()
 
     initial_state = get_initial_chat_state(state)
-
+    # 用户id上下文注入
+    set_current_user_id(str(user.id))
     return StreamingResponse(
         event_generator(
             agent=agent,
