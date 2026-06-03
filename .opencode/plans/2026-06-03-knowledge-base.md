@@ -14,67 +14,68 @@
 
 ### 后端新增文件
 
-| 文件 | 职责 |
-|------|------|
-| `src/knowledge/__init__.py` | 模块导出 |
-| `src/knowledge/embedding.py` | GLM embedding-3 封装（同步/异步 embed） |
-| `src/knowledge/chunker.py` | 递归字符分块器 |
-| `src/knowledge/milvus.py` | Milvus 连接管理、Collection Schema、索引创建 |
-| `src/knowledge/search.py` | 混合检索（dense + BM25 + RRFRanker） |
-| `src/knowledge/service.py` | 知识库 CRUD 业务逻辑 |
-| `src/tools/knowledge_search.py` | Chat Agent 知识库检索 @tool |
-| `src/tools/read_file.py` | Chat Agent 文件读取 @tool |
-| `src/tools/save_to_knowledge.py` | Chat Agent 存入知识库 @tool |
-| `src/service/controller/FileUpload.py` | 文件上传 CRUD |
-| `src/service/controller/KnowledgeEntry.py` | 知识条目 CRUD |
-| `src/service/routes/upload.py` | /upload/* 路由 |
-| `src/service/routes/knowledge.py` | /knowledge/* 路由 |
-| `src/utils/pagination.py` | 通用后端分页工具函数 |
+| 文件                                         | 职责                                         |
+| -------------------------------------------- | -------------------------------------------- |
+| `src/knowledge/__init__.py`                | 模块导出                                     |
+| `src/knowledge/embedding.py`               | GLM embedding-3 封装（同步/异步 embed）      |
+| `src/knowledge/chunker.py`                 | 递归字符分块器                               |
+| `src/knowledge/milvus.py`                  | Milvus 连接管理、Collection Schema、索引创建 |
+| `src/knowledge/search.py`                  | 混合检索（dense + BM25 + RRFRanker）         |
+| `src/knowledge/service.py`                 | 知识库 CRUD 业务逻辑                         |
+| `src/tools/knowledge_search.py`            | Chat Agent 知识库检索 @tool                  |
+| `src/tools/read_file.py`                   | Chat Agent 文件读取 @tool                    |
+| `src/tools/save_to_knowledge.py`           | Chat Agent 存入知识库 @tool                  |
+| `src/service/controller/FileUpload.py`     | 文件上传 CRUD                                |
+| `src/service/controller/KnowledgeEntry.py` | 知识条目 CRUD                                |
+| `src/service/routes/upload.py`             | /upload/* 路由                               |
+| `src/service/routes/knowledge.py`          | /knowledge/* 路由                            |
+| `src/utils/pagination.py`                  | 通用后端分页工具函数                         |
 
 ### 后端修改文件
 
-| 文件 | 改动 |
-|------|------|
-| `src/service/db/db.py` | 新增 FileUpload、KnowledgeEntry 表模型 |
-| `src/service/db/database.py` | import 新表模型 |
-| `src/service/__init__.py` | lifespan 中初始化 Milvus、注册新路由、创建 uploads 目录 |
-| `src/agent/chat/config.py` | ChatState 新增 file_ids 字段 |
-| `src/agent/chat/create_agent.py` | 工具列表扩展 |
-| `src/agent/chat/nodes/chat.py` | 系统提示词更新 |
-| `src/service/routes/chat.py` | ChatStart 新增 file_ids 字段 |
-| `requirements.txt` | 新增 pymilvus、zhipuai、charset-normalizer、PyPDF2 |
-| `.env.example` | 新增 MILVUS_URI、ZHIPU_API_KEY、UPLOAD_DIR |
+| 文件                               | 改动                                                    |
+| ---------------------------------- | ------------------------------------------------------- |
+| `src/service/db/db.py`           | 新增 FileUpload、KnowledgeEntry 表模型                  |
+| `src/service/db/database.py`     | import 新表模型                                         |
+| `src/service/__init__.py`        | lifespan 中初始化 Milvus、注册新路由、创建 uploads 目录 |
+| `src/agent/chat/config.py`       | ChatState 新增 file_ids 字段                            |
+| `src/agent/chat/create_agent.py` | 工具列表扩展                                            |
+| `src/agent/chat/nodes/chat.py`   | 系统提示词更新                                          |
+| `src/service/routes/chat.py`     | ChatStart 新增 file_ids 字段                            |
+| `requirements.txt`               | 新增 pymilvus、zhipuai、charset-normalizer、PyPDF2      |
+| `.env.example`                   | 新增 MILVUS_URI、ZHIPU_API_KEY、UPLOAD_DIR              |
 
 ### 前端新增文件
 
-| 文件 | 职责 |
-|------|------|
-| `frontend/src/types/knowledge.ts` | 知识库/文件上传类型定义 |
-| `frontend/src/api/uploadApi.ts` | 文件上传 API |
-| `frontend/src/api/knowledgeApi.ts` | 知识库 API |
-| `frontend/src/components/Modal.tsx` | 通用 Modal 壳组件（基于 @headlessui/react Dialog） |
-| `frontend/src/components/FileUploader.tsx` | 通用文件上传组件 |
-| `frontend/src/components/Pagination.tsx` | 通用分页组件 |
-| `frontend/src/hooks/usePagination.ts` | 通用分页 hook |
-| `frontend/src/pages/knowledge/KnowledgePage.tsx` | 知识库管理页面 |
-| `frontend/src/pages/knowledge/AddKnowledgeModal.tsx` | 新增知识业务弹窗 |
+| 文件                                                   | 职责                                               |
+| ------------------------------------------------------ | -------------------------------------------------- |
+| `frontend/src/types/knowledge.ts`                    | 知识库/文件上传类型定义                            |
+| `frontend/src/api/uploadApi.ts`                      | 文件上传 API                                       |
+| `frontend/src/api/knowledgeApi.ts`                   | 知识库 API                                         |
+| `frontend/src/components/Modal.tsx`                  | 通用 Modal 壳组件（基于 @headlessui/react Dialog） |
+| `frontend/src/components/FileUploader.tsx`           | 通用文件上传组件                                   |
+| `frontend/src/components/Pagination.tsx`             | 通用分页组件                                       |
+| `frontend/src/hooks/usePagination.ts`                | 通用分页 hook                                      |
+| `frontend/src/pages/knowledge/KnowledgePage.tsx`     | 知识库管理页面                                     |
+| `frontend/src/pages/knowledge/AddKnowledgeModal.tsx` | 新增知识业务弹窗                                   |
 
 ### 前端修改文件
 
-| 文件 | 改动 |
-|------|------|
-| `frontend/src/types/agent.ts` | SubmitRequest 新增 file_ids |
-| `frontend/src/routes/index.tsx` | 新增 /knowledge 路由 |
-| `frontend/src/components/SessionSidebar.tsx` | 新增"知识库"导航入口 |
-| `frontend/src/components/ResultCard.tsx` | 新增"存入知识库"按钮 |
-| `frontend/src/pages/chat/ChatPage.tsx` | 搜索框新增附件上传按钮 |
-| `frontend/src/hooks/useAgentChat.ts` | submit 支持 file_ids 参数 |
+| 文件                                           | 改动                        |
+| ---------------------------------------------- | --------------------------- |
+| `frontend/src/types/agent.ts`                | SubmitRequest 新增 file_ids |
+| `frontend/src/routes/index.tsx`              | 新增 /knowledge 路由        |
+| `frontend/src/components/SessionSidebar.tsx` | 新增"知识库"导航入口        |
+| `frontend/src/components/ResultCard.tsx`     | 新增"存入知识库"按钮        |
+| `frontend/src/pages/chat/ChatPage.tsx`       | 搜索框新增附件上传按钮      |
+| `frontend/src/hooks/useAgentChat.ts`         | submit 支持 file_ids 参数   |
 
 ---
 
 ### Task 1: 依赖安装与环境变量
 
 **Files:**
+
 - Modify: `requirements.txt`
 - Modify: `.env.example`
 
@@ -119,6 +120,7 @@ git commit -m "chore: 新增知识库功能依赖和环境变量配置"
 ### Task 2: 后端 — 数据库表模型
 
 **Files:**
+
 - Modify: `src/service/db/db.py`
 - Modify: `src/service/db/database.py`
 
@@ -176,6 +178,7 @@ git commit -m "feat: 新增 FileUpload 和 KnowledgeEntry 数据库表模型"
 ### Task 3: 后端 — Embedding 封装
 
 **Files:**
+
 - Create: `src/knowledge/__init__.py`
 - Create: `src/knowledge/embedding.py`
 
@@ -262,6 +265,7 @@ git commit -m "feat: 新增 GLM embedding-3 封装模块"
 ### Task 4: 后端 — 文本分块器
 
 **Files:**
+
 - Create: `src/knowledge/chunker.py`
 
 - [ ] **Step 1: 创建 chunker.py**
@@ -283,8 +287,9 @@ def chunk_text(
     overlap: int = 200,
 ) -> list[Chunk]:
     """
-    递归字符分块器。
+    递归字符分块器，支持重叠。
     将 title + content 按段落、行、字符优先级分割，每个 chunk 开头拼接 title。
+    相邻块之间有 overlap 字符的重叠，确保跨块上下文连续。
     参数:
         content: 待分块的原始文本
         title: 知识标题，拼接到每个 chunk 开头
@@ -297,14 +302,16 @@ def chunk_text(
     if len(full_text) <= chunk_size:
         return [Chunk(text=full_text, index=0)]
     chunks: list[str] = []
-    _recursive_split(full_text, chunk_size, chunks)
+    _recursive_split(full_text, chunk_size, overlap, chunks)
     result: list[Chunk] = []
     for i, text in enumerate(chunks):
         result.append(Chunk(text=text, index=i))
     return result
 
 
-def _recursive_split(text: str, chunk_size: int, chunks: list[str]) -> None:
+def _recursive_split(
+    text: str, chunk_size: int, overlap: int, chunks: list[str]
+) -> None:
     """
     递归分割文本。优先按 \\n\\n 分，再按 \\n 分，最后按字符分。
     """
@@ -315,16 +322,21 @@ def _recursive_split(text: str, chunk_size: int, chunks: list[str]) -> None:
     for sep in separators:
         if sep in text:
             parts = text.split(sep)
-            _merge_parts(parts, sep, chunk_size, chunks)
+            _merge_parts(parts, sep, chunk_size, overlap, chunks)
             return
-    _split_by_chars(text, chunk_size, chunks)
+    _split_by_chars(text, chunk_size, overlap, chunks)
 
 
 def _merge_parts(
-    parts: list[str], sep: str, chunk_size: int, chunks: list[str]
+    parts: list[str],
+    sep: str,
+    chunk_size: int,
+    overlap: int,
+    chunks: list[str],
 ) -> None:
     """
     将分割后的段落合并为不超过 chunk_size 的块。
+    块之间保留 overlap 字符的重叠。
     """
     current = ""
     for part in parts:
@@ -333,18 +345,34 @@ def _merge_parts(
             current = candidate
         else:
             if current:
-                _recursive_split(current, chunk_size, chunks)
-            current = part
-    if current:
-        _recursive_split(current, chunk_size, chunks)
+                _recursive_split(current, chunk_size, overlap, chunks)
+                overlap_text = current[-overlap:] if overlap < len(current) else current
+                current = overlap_text + sep + part
+            else:
+                current = part
+            if len(current) > chunk_size:
+                _recursive_split(current, chunk_size, overlap, chunks)
+                last_chunk = chunks[-1] if chunks else ""
+                current = last_chunk[-overlap:] if overlap < len(last_chunk) else last_chunk
+                if not current:
+                    current = part
+    if current and len(current) <= chunk_size:
+        chunks.append(current)
+    elif current:
+        _recursive_split(current, chunk_size, overlap, chunks)
 
 
-def _split_by_chars(text: str, chunk_size: int, chunks: list[str]) -> None:
+def _split_by_chars(
+    text: str, chunk_size: int, overlap: int, chunks: list[str]
+) -> None:
     """
-    按固定字符数分割文本。
+    按固定字符数分割文本，步长为 chunk_size - overlap。
     """
-    for i in range(0, len(text), chunk_size):
-        chunks.append(text[i : i + chunk_size])
+    step = max(1, chunk_size - overlap)
+    for i in range(0, len(text), step):
+        chunk = text[i : i + chunk_size]
+        if chunk:
+            chunks.append(chunk)
 ```
 
 - [ ] **Step 2: Commit**
@@ -359,6 +387,7 @@ git commit -m "feat: 新增递归字符分块器"
 ### Task 5: 后端 — Milvus 连接管理
 
 **Files:**
+
 - Create: `src/knowledge/milvus.py`
 
 - [ ] **Step 1: 创建 milvus.py**
@@ -498,6 +527,7 @@ git commit -m "feat: 新增 Milvus 连接管理和 Collection 自动创建"
 ### Task 6: 后端 — 通用分页工具
 
 **Files:**
+
 - Create: `src/utils/pagination.py`
 
 - [ ] **Step 1: 创建通用分页工具函数**
@@ -602,6 +632,7 @@ git commit -m "feat: 新增通用后端分页工具函数"
 ### Task 7: 后端 — 混合检索
 
 **Files:**
+
 - Create: `src/knowledge/search.py`
 
 - [ ] **Step 1: 创建 search.py**
@@ -688,6 +719,7 @@ git commit -m "feat: 新增知识库混合检索（dense + BM25 + RRF）"
 ### Task 8: 后端 — 知识库业务层
 
 **Files:**
+
 - Create: `src/knowledge/service.py`
 
 - [ ] **Step 1: 创建 service.py**
@@ -855,6 +887,7 @@ git commit -m "feat: 新增知识库业务层（存入、删除、列表、检�
 ### Task 9: 后端 — 文件上传 Controller
 
 **Files:**
+
 - Create: `src/service/controller/FileUpload.py`
 
 - [ ] **Step 1: 创建 FileUpload.py**
@@ -985,6 +1018,7 @@ git commit -m "feat: 新增文件上传 Controller"
 ### Task 10: 后端 — 文件上传路由
 
 **Files:**
+
 - Create: `src/service/routes/upload.py`
 
 - [ ] **Step 1: 创建 upload.py**
@@ -1096,6 +1130,7 @@ git commit -m "feat: 新增文件上传路由"
 ### Task 11: 后端 — 知识库路由
 
 **Files:**
+
 - Create: `src/service/controller/KnowledgeEntry.py`
 - Create: `src/service/routes/knowledge.py`
 
@@ -1163,13 +1198,7 @@ async def create_entry(
         source_type=body.source_type,
         source_id=body.source_id,
     )
-    return Result.success({
-        "id": entry.id,
-        "title": entry.title,
-        "chunk_count": entry.chunk_count,
-        "source_type": entry.source_type,
-        "create_at": str(entry.create_at),
-    })
+    return Result.success(entry)
 
 
 @router.get("/entries")
@@ -1183,23 +1212,7 @@ async def get_entries(
     获取当前用户知识条目列表。
     """
     result = await _list_entries(session, user.id, page, size)
-    return Result.success({
-        "items": [
-            {
-                "id": e.id,
-                "title": e.title,
-                "source_type": e.source_type,
-                "chunk_count": e.chunk_count,
-                "content_preview": e.content_preview,
-                "create_at": str(e.create_at),
-            }
-            for e in result.items
-        ],
-        "total": result.total,
-        "page": result.page,
-        "size": result.size,
-        "total_pages": result.total_pages,
-    })
+    return Result.success(result)
 
 
 @router.get("/entries/{entry_id}")
@@ -1215,15 +1228,7 @@ async def get_entry_detail(
     entry = await session.get(KnowledgeEntry, entry_id)
     if not entry or str(entry.user_id) != str(user.id):
         return Result.error("知识条目不存在")
-    return Result.success({
-        "id": entry.id,
-        "title": entry.title,
-        "source_type": entry.source_type,
-        "source_id": entry.source_id,
-        "chunk_count": entry.chunk_count,
-        "content_preview": entry.content_preview,
-        "create_at": str(entry.create_at),
-    })
+    return Result.success(entry)
 
 
 @router.delete("/entries/{entry_id}")
@@ -1254,15 +1259,7 @@ async def search_route(
     if not query:
         return Result.error("查询内容不能为空")
     hits = await _search_knowledge(user.id, query, top_k)
-    return Result.success([
-        {
-            "entry_id": h.entry_id,
-            "chunk_index": h.chunk_index,
-            "text": h.text,
-            "score": h.score,
-        }
-        for h in hits
-    ])
+    return Result.success(hits)
 ```
 
 - [ ] **Step 3: Commit**
@@ -1277,6 +1274,7 @@ git commit -m "feat: 新增知识库路由和 Controller"
 ### Task 12: 后端 — Chat Agent 工具（knowledge_search、read_file、save_to_knowledge）
 
 **Files:**
+
 - Create: `src/tools/knowledge_search.py`
 - Create: `src/tools/read_file.py`
 - Create: `src/tools/save_to_knowledge.py`
@@ -1295,9 +1293,9 @@ async def knowledge_search(query: str) -> str:
     :query str: 检索查询文本
     """
     from src.knowledge.search import hybrid_search
-    from src.utils.agent import _get_current_user_id
+    from src.utils.agent import get_current_user_id
 
-    user_id = _get_current_user_id()
+    user_id = get_current_user_id()
     if not user_id:
         return "无法获取用户信息"
 
@@ -1357,9 +1355,9 @@ async def save_to_knowledge(title: str, content: str) -> str:
     from src.service.db.database import engine
     from sqlmodel.ext.asyncio.session import AsyncSession
     from src.knowledge.service import save_entry
-    from src.utils.agent import _get_current_user_id
+    from src.utils.agent import get_current_user_id
 
-    user_id = _get_current_user_id()
+    user_id = get_current_user_id()
     if not user_id:
         return "无法获取用户信息，请先登录"
 
@@ -1375,30 +1373,30 @@ async def save_to_knowledge(title: str, content: str) -> str:
         return f"已成功存入知识库，标题: {entry.title}，共 {entry.chunk_count} 个分块"
 ```
 
-- [ ] **Step 4: 在 src/utils/agent.py 中新增 _get_current_user_id 辅助函数**
+- [ ] **Step 4: 在 src/utils/agent.py 中新增用户上下文管理（contextvars）**
 
 在文件末尾追加：
 
 ```python
-_current_user_id: str | None = None
+from contextvars import ContextVar
+
+_current_user_id: ContextVar[str | None] = ContextVar("current_user_id", default=None)
 
 
 def set_current_user_id(user_id: str | None) -> None:
     """
-    设置当前请求的用户 ID（线程/协程局部）。
+    设置当前请求的用户 ID（协程安全）。
+    基于 contextvars 实现，每个异步请求有独立的上下文。
     """
-    global _current_user_id
-    _current_user_id = user_id
+    _current_user_id.set(user_id)
 
 
-def _get_current_user_id() -> str | None:
+def get_current_user_id() -> str | None:
     """
     获取当前请求的用户 ID。
     """
-    return _current_user_id
+    return _current_user_id.get()
 ```
-
-> **注意**：这种方式在多并发场景下不安全。如果后续需要，应改用 contextvars。初期可用此简单方案。
 
 - [ ] **Step 5: Commit**
 
@@ -1412,6 +1410,7 @@ git commit -m "feat: 新增 Chat Agent 知识库检索、文件读取、存入�
 ### Task 13: 后端 — ChatState、系统提示词、工具绑定、路由集成
 
 **Files:**
+
 - Modify: `src/agent/chat/config.py`
 - Modify: `src/agent/chat/create_agent.py`
 - Modify: `src/agent/chat/nodes/chat.py`
@@ -1505,19 +1504,62 @@ CHAT_SYSTEM_PROMPT = """你是一个知识助手。你可以：
 回复使用中文。"""
 ```
 
-修改 `chat_node` 函数中的工具绑定：
+修改 `chat_node` 函数中的工具绑定和 messages 注入：
 
 ```python
-llm_with_tools = llm.bind_tools([research, knowledge_search, read_file, save_to_knowledge])
-```
-
-需要在文件顶部添加 import：
-
-```python
+from langchain.messages import SystemMessage, HumanMessage
+from src.agent.chat.config import ChatState
+from src.llm import init_model
+from src.tools.research import research
 from src.tools.knowledge_search import knowledge_search
 from src.tools.read_file import read_file
 from src.tools.save_to_knowledge import save_to_knowledge
+
+CHAT_SYSTEM_PROMPT = """你是一个知识助手。你可以：
+1. 直接回答用户的简单问题（闲聊、解释概念、提供建议）
+2. 调用 knowledge_search 检索已有知识库
+3. 当用户需要深度研究时，调用 research 工具
+4. 调用 read_file 读取用户上传的附件内容
+5. 调用 save_to_knowledge 将内容存入知识库
+
+规则：
+- 用户消息附带附件时，必须先调用 read_file 获取文件内容，然后根据用户意图处理
+- 根据用户意图决定是否调用 save_to_knowledge
+- 用户说"存入知识库"、"记录下来"、"保存一下"等类似意图时，调用 save_to_knowledge
+- 对于非简单问题，优先调用 knowledge_search 查看是否有相关知识
+- knowledge_search 有结果时，结合检索结果回答，无需再 research
+- knowledge_search 无结果且需要深度研究时，再调用 research
+- 触发 research 的场景：用户要求总结、分析、深度研究某个话题；用户消息以 /research 开头；需要搜索多个来源并综合分析
+
+回复使用中文。"""
+
+
+async def chat_node(state: ChatState) -> dict:
+    llm = init_model()
+    llm_with_tools = llm.bind_tools([research, knowledge_search, read_file, save_to_knowledge])
+
+    state_messages = state.get("messages", [])
+    existing_messages = []
+
+    for msg in state_messages:
+        if isinstance(msg, SystemMessage):
+            continue
+        existing_messages.append(msg)
+
+    messages = [SystemMessage(content=CHAT_SYSTEM_PROMPT)] + existing_messages
+
+    file_ids = state.get("file_ids")
+    if file_ids:
+        ids_text = ", ".join(file_ids)
+        messages.append(HumanMessage(content=f"[系统提示：用户上传了附件，file_id 为 {ids_text}，请调用 read_file 工具获取内容后处理用户请求]"))
+
+    response = await llm_with_tools.ainvoke(messages)
+    return {
+        "messages": [response],
+    }
 ```
+
+关键点：当 `file_ids` 非空时，在 messages 末尾追加一条 HumanMessage 告知 LLM 有附件，LLM 据此决定调用 `read_file`。这条消息不会持久化到数据库（它是临时注入的，不经过 PG）。
 
 - [ ] **Step 4: 修改 ChatStart — 新增 file_ids**
 
@@ -1577,6 +1619,7 @@ git commit -m "feat: Chat Agent 集成知识库检索、文件读取、存入知
 ### Task 14: 前端 — 类型定义和 API 客户端
 
 **Files:**
+
 - Create: `frontend/src/types/knowledge.ts`
 - Create: `frontend/src/api/uploadApi.ts`
 - Create: `frontend/src/api/knowledgeApi.ts`
@@ -1711,6 +1754,7 @@ git commit -m "feat: 前端新增知识库类型定义和 API 客户端"
 ### Task 15: 前端 — 通用 UI 组件（Modal、FileUploader、Pagination）
 
 **Files:**
+
 - Create: `frontend/src/components/Modal.tsx`
 - Create: `frontend/src/components/FileUploader.tsx`
 
@@ -1949,6 +1993,7 @@ git commit -m "feat: 前端新增通用 Modal（Headless UI）、FileUploader、
 ### Task 16: 前端 — 知识库管理页面
 
 **Files:**
+
 - Create: `frontend/src/pages/knowledge/KnowledgePage.tsx`
 - Create: `frontend/src/pages/knowledge/AddKnowledgeModal.tsx`
 - Modify: `frontend/src/routes/index.tsx`
@@ -2238,11 +2283,13 @@ export default function KnowledgePage() {
 在 `frontend/src/routes/index.tsx` 中：
 
 添加 import：
+
 ```typescript
 import KnowledgePage from "../pages/knowledge/KnowledgePage";
 ```
 
 在 ProtectedRoute → AppLayout 的 children 数组中新增：
+
 ```typescript
 children: [
   { path: "/", element: <ChatPage /> },
@@ -2255,6 +2302,7 @@ children: [
 在 `frontend/src/components/SessionSidebar.tsx` 中：
 
 添加 import：
+
 ```typescript
 import { Link } from "react-router-dom";
 import { Database } from "lucide-react";
@@ -2286,6 +2334,7 @@ git commit -m "feat: 前端新增知识库管理页面和导航入口"
 ### Task 17: 前端 — Chat 页面集成（附件上传 + 存入知识库按钮）
 
 **Files:**
+
 - Modify: `frontend/src/pages/chat/ChatPage.tsx`
 - Modify: `frontend/src/components/ResultCard.tsx`
 - Modify: `frontend/src/hooks/useAgentChat.ts`
@@ -2316,6 +2365,7 @@ await agentApi.submitSSETask(
 在 `frontend/src/pages/chat/ChatPage.tsx` 中：
 
 添加 import：
+
 ```typescript
 import { Paperclip, X } from "lucide-react";
 import { uploadApi } from "../../api/uploadApi";
@@ -2323,6 +2373,7 @@ import type { FileUploadRecord } from "../../types/knowledge";
 ```
 
 在 ChatPage 组件中新增附件状态：
+
 ```typescript
 const [pendingFiles, setPendingFiles] = useState<FileUploadRecord[]>([]);
 ```
@@ -2341,6 +2392,7 @@ setPendingFiles([]);
 在 `frontend/src/components/ResultCard.tsx` 中：
 
 添加 props：
+
 ```typescript
 interface ResultCardProps {
   state: AgentState;
@@ -2380,6 +2432,7 @@ git commit -m "feat: 前端 Chat 页面集成附件上传和存入知识库按�
 ### Task 18: 后端 — SSE 流中传递 file_ids 到 ChatState
 
 **Files:**
+
 - Modify: `src/service/routes/chat.py`
 - Modify: `src/service/routes/sse.py`
 
@@ -2418,6 +2471,7 @@ git commit -m "feat: 聊天路由支持 file_ids 传递和用户上下文注入"
 ### Task 19: 记忆文件更新
 
 **Files:**
+
 - Modify: `.opencode/memory/backend.md`
 - Modify: `.opencode/memory/agent.md`
 - Modify: `.opencode/memory/frontend.md`
@@ -2452,18 +2506,18 @@ git commit -m "docs: 更新记忆文件，补充知识库功能描述"
 
 ### Spec Coverage
 
-| 需求 | 对应 Task |
-|------|-----------|
-| 用户独立知识库 | Task 5（collection per user） |
-| 三种存入触发 | Task 8（service.save_entry）、Task 11（路由）、Task 17（前端） |
-| Chat 页面附件上传 | Task 9-10（上传 API）、Task 17（前端集成） |
-| 知识库管理页面 | Task 15-16 |
-| Milvus + GLM embedding-3 | Task 3、Task 5 |
-| BM25 混合检索 | Task 7 |
-| Chat Agent 自动检索 | Task 12-13 |
-| 文件解析复用 reader.py | Task 9（直接调用 read()） |
-| Headless UI 通用组件 | Task 15（Modal、Pagination、FileUploader） |
-| 通用分页（前后端复用） | Task 6（后端 paginate）、Task 15（前端 usePagination + Pagination） |
+| 需求                     | 对应 Task                                                           |
+| ------------------------ | ------------------------------------------------------------------- |
+| 用户独立知识库           | Task 5（collection per user）                                       |
+| 三种存入触发             | Task 8（service.save_entry）、Task 11（路由）、Task 17（前端）      |
+| Chat 页面附件上传        | Task 9-10（上传 API）、Task 17（前端集成）                          |
+| 知识库管理页面           | Task 15-16                                                          |
+| Milvus + GLM embedding-3 | Task 3、Task 5                                                      |
+| BM25 混合检索            | Task 7                                                              |
+| Chat Agent 自动检索      | Task 12-13                                                          |
+| 文件解析复用 reader.py   | Task 9（直接调用 read()）                                           |
+| Headless UI 通用组件     | Task 15（Modal、Pagination、FileUploader）                          |
+| 通用分页（前后端复用）   | Task 6（后端 paginate）、Task 15（前端 usePagination + Pagination） |
 
 ### Placeholder Scan
 
