@@ -14,6 +14,33 @@ def get_milvus_client() -> MilvusClient:
     _client = MilvusClient(uri=MILVUS_URI)
   return _client
 
+def _ensure_indexes(client: MilvusClient, col_name: str) -> None:
+  """确保 collection 上存在必要的索引，若缺失则创建。"""
+  index_names = client.list_indexes(collection_name=col_name)
+  existing = {client.describe_index(col_name, name).get("field_name", "") for name in index_names}
+  need_create = False
+  index_params = client.prepare_index_params()
+
+  if "dense_vector" not in existing:
+    index_params.add_index(
+      field_name="dense_vector",
+      index_type="AUTOINDEX",
+      metric_type="IP",
+    )
+    need_create = True
+
+  if "sparse_vector" not in existing:
+    index_params.add_index(
+      field_name="sparse_vector",
+      index_type="SPARSE_INVERTED_INDEX",
+      metric_type="BM25",
+      params={"inverted_index_algo": "DAAT_MAXSCORE"},
+    )
+    need_create = True
+
+  if need_create:
+    client.create_index(collection_name=col_name, index_params=index_params)
+
 def _collection_name(user_id: str) -> str:
   return f"knowledge_{user_id.replace('-', '_')}"
 
@@ -26,6 +53,8 @@ def get_or_create_collection(user_id: str) -> str:
   col_name = _collection_name(user_id)
 
   if client.has_collection(col_name):
+    _ensure_indexes(client, col_name)
+    client.load_collection(col_name)
     return col_name
   
   schema = CollectionSchema(fields=[
@@ -71,23 +100,7 @@ def get_or_create_collection(user_id: str) -> str:
   schema.add_function(bm25_function)
 
   client.create_collection(collection_name=col_name, schema=schema)
-
-  index_params = client.prepare_index_params()
-  index_params.add_index(
-    field_name="dense_vector",
-    index_type="AUTOINDEX",
-    metric_type="IP",
-  )
-  index_params.add_index(
-    field_name="sparse_vector",
-    index_type="SPARSE_INVERTED_INDEX",
-    metric_type="BM25",
-    params={"inverted_index_algo": "DAAT_MAXSCORE"},
-  )
-  client.create_index(
-    collection_name=col_name,
-    index_params=index_params,
-  )
+  _ensure_indexes(client, col_name)
   client.load_collection(col_name)
 
   return col_name
