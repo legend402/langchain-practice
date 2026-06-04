@@ -1,4 +1,5 @@
-import { MessageSquarePlus, Trash2, PanelLeftClose, PanelLeft, BookOpen, MessageSquare } from "lucide-react";
+import { useState } from "react";
+import { Trash2, PanelLeftClose, PanelLeft, BookOpen, MessageSquare, ChevronDown, Sparkles } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import type { ChatSession } from "../types/agent";
 
@@ -36,6 +37,7 @@ export default function SessionSidebar({
   const navigate = useNavigate();
   const location = useLocation();
   const isKnowledgeActive = location.pathname === "/knowledge";
+  const [historyCollapsed, setHistoryCollapsed] = useState(false);
 
   return (
     <>
@@ -47,31 +49,26 @@ export default function SessionSidebar({
       )}
       <aside className={`sidebar-panel ${collapsed ? "sidebar-collapsed" : ""}`}>
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <span className="text-sm font-semibold text-ink-100 uppercase tracking-wider sidebar-label">
-            历史会话
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={onNew}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-ink-400 hover:text-accent hover:bg-accent-bg transition-all cursor-pointer"
-              title="新建会话"
-            >
-              <MessageSquarePlus className="w-[18px] h-[18px]" />
-            </button>
-            <button
-              onClick={onToggle}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-ink-400 hover:text-ink-100 hover:bg-white/40 transition-all cursor-pointer"
-              title="收起侧栏"
-            >
-              <PanelLeftClose className="w-[18px] h-[18px]" />
-            </button>
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-accent" />
+            <span className="text-base font-bold text-ink-100 sidebar-label">Research</span>
           </div>
+          <button
+            onClick={onToggle}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-ink-400 hover:text-ink-100 hover:bg-white/40 transition-all cursor-pointer"
+            title="收起侧栏"
+          >
+            <PanelLeftClose className="w-[18px] h-[18px]" />
+          </button>
         </div>
 
         <div className="px-2 pb-2 space-y-0.5">
           <button
-            onClick={() => navigate("/")}
-            className={`sidebar-item w-full ${location.pathname === "/" ? "active" : ""}`}
+            onClick={() => {
+              onNew();
+              navigate("/");
+            }}
+            className={`sidebar-item w-full ${location.pathname === "/" && !activeThreadId ? "active" : ""}`}
           >
             <MessageSquare className="w-4 h-4 shrink-0" />
             <span className="text-sm text-ink-100">聊天</span>
@@ -85,7 +82,19 @@ export default function SessionSidebar({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-3 sidebar-content">
+        <button
+          onClick={() => setHistoryCollapsed((v) => !v)}
+          className="flex items-center gap-1.5 px-4 py-2 cursor-pointer group"
+        >
+          <ChevronDown
+            className={`w-3.5 h-3.5 text-ink-400 transition-transform duration-200 ${historyCollapsed ? "-rotate-90" : ""}`}
+          />
+          <span className="text-xs font-medium text-ink-400 uppercase tracking-wider group-hover:text-ink-300 transition-colors">
+            历史会话
+          </span>
+        </button>
+
+        <div className={`flex-1 overflow-y-auto overflow-x-hidden px-2 pb-3 sidebar-content transition-all duration-200 ${historyCollapsed ? "hidden" : ""}`}>
           {sessions.length === 0 ? (
             <p className="text-xs text-ink-400 text-center py-8">暂无会话</p>
           ) : (
