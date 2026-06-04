@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAgentChatContext } from "../../contexts/AgentChatContext";
 import { useSidebar } from "../../contexts/SidebarContext";
 import type { FileUpload } from "../../types/knowledge";
+import logoSvg from "../../assets/logo.svg";
 
 import SearchForm from "../../components/SearchForm";
 import MessageList from "../../components/MessageList";
@@ -13,6 +14,8 @@ export default function ChatPage() {
   const chat = useAgentChatContext();
   const sidebar = useSidebar();
   const [attachments, setAttachments] = useState<FileUpload[]>([]);
+
+  const isEmpty = chat.messages.length === 0 && !chat.loading;
 
   /**
    * 添加文件附件
@@ -40,6 +43,17 @@ export default function ChatPage() {
     await chat.submit(query, fileIds);
   }
 
+  const searchForm = (
+    <SearchForm
+      onSubmit={handleSubmit}
+      onStop={chat.stop}
+      loading={chat.loading}
+      attachments={attachments}
+      onAddAttachment={handleAddAttachment}
+      onRemoveAttachment={handleRemoveAttachment}
+    />
+  );
+
   return (
     <div
       className={`flex-1 flex flex-col min-w-0 h-screen main-area ${
@@ -47,25 +61,38 @@ export default function ChatPage() {
       }`}
     >
       <main
-        className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 overflow-hidden"
-        style={{ height: "calc(100vh)" }}
+        className={`max-w-3xl w-full mx-auto px-4 overflow-hidden ${
+          isEmpty ? "flex flex-col items-center justify-center h-screen" : "flex flex-col h-screen"
+        }`}
       >
-        <MessageList
-          messages={chat.messages}
-          loading={chat.loading}
-          currentState={chat.currentState}
-          activeNode={chat.activeNode}
-        />
-        <div className="shrink-0 pb-4 pt-0 space-y-3">
-          <SearchForm
-            onSubmit={handleSubmit}
-            onStop={chat.stop}
-            loading={chat.loading}
-            attachments={attachments}
-            onAddAttachment={handleAddAttachment}
-            onRemoveAttachment={handleRemoveAttachment}
-          />
-        </div>
+        {isEmpty ? (
+          <div className="flex flex-col items-center gap-6 w-full -mt-16">
+            <div className="flex items-center gap-2">
+              <img src={logoSvg} alt="" className="w-5 h-5 text-accent" />
+              <h1 className="text-xl font-semibold text-ink-100 tracking-tight">
+                知识研究助手
+              </h1>
+            </div>
+            <p className="text-sm text-ink-400 text-center">
+              提出问题，AI 将自动搜索、分析并生成结构化知识总结
+            </p>
+            <div className="w-full max-w-2xl">
+              {searchForm}
+            </div>
+          </div>
+        ) : (
+          <>
+            <MessageList
+              messages={chat.messages}
+              loading={chat.loading}
+              currentState={chat.currentState}
+              activeNode={chat.activeNode}
+            />
+            <div className="shrink-0 pb-4 pt-0 space-y-3">
+              {searchForm}
+            </div>
+          </>
+        )}
       </main>
     </div>
   );
