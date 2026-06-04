@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { BookOpen, Plus, Search, Trash2, FileText, Type } from "lucide-react";
 import { usePagination } from "../../hooks/usePagination";
+import { useSidebar } from "../../contexts/SidebarContext";
 import { knowledgeApi } from "../../api/knowledgeApi";
 import Pagination from "../../components/Pagination";
 import AddKnowledgeModal from "./AddKnowledgeModal";
@@ -107,9 +108,10 @@ export default function KnowledgePage() {
   }
 
   const isInitialLoading = items.length === 0 && loading && !isSearching;
+  const sidebar = useSidebar();
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className={`min-h-screen flex flex-col main-area ${sidebar.collapsed ? "sidebar-collapsed" : "sidebar-expanded"}`}>
       <header className="sticky top-0 z-10 px-6 py-5 flex items-center justify-between gap-4 border-b border-white/10 bg-background/80 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <BookOpen className="w-6 h-6 text-accent" />
