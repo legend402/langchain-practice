@@ -119,7 +119,6 @@ export function useAgentChat() {
   const [loading, setLoading] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 768);
   const [activeNode, setActiveNode] = useState<string>("");
   const stateRef = useRef<AgentState>(createInitialState());
 
@@ -362,10 +361,8 @@ export function useAgentChat() {
     showResultCard,
     sessions,
     activeThreadId,
-    sidebarCollapsed,
     loadSession,
     startNewSession,
     deleteSession,
-    toggleSidebar: () => setSidebarCollapsed((v) => !v),
   };
 }
