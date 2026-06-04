@@ -1,4 +1,4 @@
-import { MessageSquarePlus, Trash2, PanelLeftClose, PanelLeft, BookOpen } from "lucide-react";
+import { MessageSquarePlus, Trash2, PanelLeftClose, PanelLeft, BookOpen, MessageSquare } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import type { ChatSession } from "../types/agent";
 
@@ -68,12 +68,17 @@ export default function SessionSidebar({
           </div>
         </div>
 
-        <div className="px-2 pb-2">
+        <div className="px-2 pb-2 space-y-0.5">
+          <button
+            onClick={() => navigate("/")}
+            className={`sidebar-item w-full ${location.pathname === "/" ? "active" : ""}`}
+          >
+            <MessageSquare className="w-4 h-4 shrink-0" />
+            <span className="text-sm text-ink-100">聊天</span>
+          </button>
           <button
             onClick={() => navigate("/knowledge")}
-            className={`sidebar-item w-full flex items-center gap-2 ${
-              isKnowledgeActive ? "active" : ""
-            }`}
+            className={`sidebar-item w-full ${isKnowledgeActive ? "active" : ""}`}
           >
             <BookOpen className="w-4 h-4 shrink-0" />
             <span className="text-sm text-ink-100">知识库</span>
