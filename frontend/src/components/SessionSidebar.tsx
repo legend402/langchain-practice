@@ -51,7 +51,7 @@ export default function SessionSidebar({
       <aside className={`sidebar-panel ${collapsed ? "sidebar-collapsed" : ""}`}>
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
           <div className="flex items-center gap-2.5">
-            <img src={logoSvg} alt="Research" className="w-7 h-7" />
+            <img src={logoSvg} alt="Research" className="w-7 h-7 text-accent" />
             <span className="text-base font-bold text-ink-100 sidebar-label">Research</span>
           </div>
           <button
