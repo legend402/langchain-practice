@@ -1,4 +1,4 @@
-import { httpClient, tokenStorage } from "./client";
+import { httpClient } from "./client";
 import type { FileUpload } from "../types/knowledge";
 
 /**
@@ -7,16 +7,9 @@ import type { FileUpload } from "../types/knowledge";
  * @returns 文件上传记录
  */
 async function uploadFile(file: File): Promise<FileUpload> {
-  const token = tokenStorage.getAccessToken();
   const formData = new FormData();
   formData.append("file", file);
-  const res = await httpClient.raw("/upload/file", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
-  });
+  const res = await httpClient.upload("/upload/file", formData);
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
   const body = await res.json();
   return body.result;

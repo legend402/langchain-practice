@@ -168,6 +168,17 @@ export class HttpClient {
   }
 
   /**
+   * 文件上传，经过拦截器管道但不强制 Content-Type（浏览器自动设置 multipart/form-data boundary）
+   */
+  async upload(url: string, formData: FormData, init: RequestInit = {}): Promise<Response> {
+    return this.fetchWithInterceptors(url, {
+      ...init,
+      method: "POST",
+      body: formData,
+    });
+  }
+
+  /**
    * 完全绕过拦截器，用于 refresh/login/register 等底层调用
    */
   raw(url: string, init: RequestInit = {}): Promise<Response> {
