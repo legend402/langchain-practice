@@ -84,17 +84,22 @@ export default function SessionSidebar({
 
         <button
           onClick={() => setHistoryCollapsed((v) => !v)}
-          className="flex items-center gap-1.5 px-4 py-2 cursor-pointer group"
+          className="flex items-center gap-2 px-4 py-2 cursor-pointer group"
         >
-          <ChevronDown
-            className={`w-3.5 h-3.5 text-ink-400 transition-transform duration-200 ${historyCollapsed ? "-rotate-90" : ""}`}
-          />
-          <span className="text-xs font-medium text-ink-400 uppercase tracking-wider group-hover:text-ink-300 transition-colors">
+          <span className="text-sm font-semibold text-ink-200 group-hover:text-ink-100 transition-colors">
             历史会话
           </span>
+          <ChevronDown
+            className={`w-4 h-4 text-ink-300 transition-transform duration-200 ${historyCollapsed ? "-rotate-90" : ""}`}
+          />
         </button>
 
-        <div className={`flex-1 overflow-y-auto overflow-x-hidden px-2 pb-3 sidebar-content transition-all duration-200 ${historyCollapsed ? "hidden" : ""}`}>
+        <div
+          className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-3 sidebar-content grid transition-[grid-template-rows,opacity] duration-200 ease-in-out"
+          style={{ gridTemplateRows: historyCollapsed ? "0fr" : "1fr" }}
+        >
+          <div className="overflow-hidden">
+            <div className="transition-opacity duration-200" style={{ opacity: historyCollapsed ? 0 : 1 }}>
           {sessions.length === 0 ? (
             <p className="text-xs text-ink-400 text-center py-8">暂无会话</p>
           ) : (
@@ -128,6 +133,8 @@ export default function SessionSidebar({
               ))}
             </div>
           )}
+            </div>
+          </div>
         </div>
         <div className="px-3 py-3 border-t border-white/30 mt-auto">
           <div className="flex items-center justify-between">
