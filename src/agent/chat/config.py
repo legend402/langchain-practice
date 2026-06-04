@@ -27,15 +27,7 @@ def get_initial_chat_state(state: ChatState):
 
     initial_state: ChatState = {
         "user_query": state.get("user_query", ""),
-        "messages": (
-            state["messages"]
-            if state.get("messages", None)
-            else (
-                [HumanMessage(state.get("user_query"))]
-                if state.get("user_query")
-                else []
-            )
-        ),
+        "messages": messages,
         "research_active": state.get("research_active", False),
         "research_result": state.get("research_result", ""),
         "file_ids": state.get("file_ids", None),
