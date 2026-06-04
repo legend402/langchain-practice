@@ -1,13 +1,14 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { FileUp, X, Loader2 } from "lucide-react";
 import { uploadApi } from "../api/uploadApi";
 import type { FileUpload } from "../types/knowledge";
+
+const ALLOWED_EXTENSIONS = [".txt", ".md", ".html", ".pdf", ".docx"];
 
 interface FileUploaderProps {
   onUploadComplete: (file: FileUpload) => void;
   onRemove: (fileId: string) => void;
   files: FileUpload[];
-  accept?: string;
 }
 
 /**
@@ -15,21 +16,29 @@ interface FileUploaderProps {
  * @param onUploadComplete 上传成功回调
  * @param onRemove 删除文件回调
  * @param files 已上传文件列表
- * @param accept 接受的文件类型
  */
 export default function FileUploader({
   onUploadComplete,
   onRemove,
   files,
-  accept = ".txt,.md,.html,.pdf,.docx",
 }: FileUploaderProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const acceptStr = useMemo(() => ALLOWED_EXTENSIONS.join(","), []);
+  const displayTypes = useMemo(() => ALLOWED_EXTENSIONS.join("、"), []);
+
   async function handleFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
     const file = fileList[0];
+    const ext = "." + file.name.split(".").pop()?.toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      setError(`不支持的文件格式，仅支持 ${displayTypes}`);
+      setTimeout(() => setError(null), 3000);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     setUploading(true);
     setError(null);
     try {
@@ -76,7 +85,7 @@ export default function FileUploader({
         <input
           ref={inputRef}
           type="file"
-          accept={accept}
+          accept={acceptStr}
           onChange={(e) => handleFiles(e.target.files)}
           className="hidden"
         />
@@ -89,7 +98,7 @@ export default function FileUploader({
           <div className="flex flex-col items-center gap-2">
             <FileUp className="w-8 h-8 text-ink-400" />
             <p className="text-ink-400 text-sm">拖拽文件到此处，或点击选择文件</p>
-            <p className="text-ink-600 text-xs">支持 {accept}</p>
+            <p className="text-ink-600 text-xs">支持 {displayTypes}</p>
           </div>
         )}
       </div>

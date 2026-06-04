@@ -8,7 +8,7 @@ from src.service.db.db import FileUpload
 
 
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
-ALLOWED_EXTENSIONS = {".txt", ".md", ".markdown", ".html", ".htm", ".docx", ".doc", ".pdf"}
+ALLOWED_EXTENSIONS = frozenset({".txt", ".md", ".html", ".pdf", ".docx"})
 
 def ensure_upload_dir() -> None:
   """

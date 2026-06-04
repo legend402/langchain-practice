@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { ArrowUp, Square, Paperclip, X, Loader2 } from "lucide-react";
+import { ArrowUp, Square, Paperclip, X, Loader2, FileText } from "lucide-react";
 import type { FileUpload } from "../types/knowledge";
 import { uploadApi } from "../api/uploadApi";
+
+const ALLOWED_EXTENSIONS = [".txt", ".md", ".html", ".pdf", ".docx"];
 
 interface SearchFormProps {
   onSubmit: (query: string) => void;
@@ -55,6 +57,8 @@ export default function SearchForm({
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !onAddAttachment) return;
+    const ext = "." + file.name.split(".").pop()?.toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) return;
     setUploading(true);
     try {
       const result = await uploadApi.uploadFile(file);
@@ -94,21 +98,24 @@ export default function SearchForm({
     <form onSubmit={handleSubmit}>
       <div className="glass-card relative px-5 py-4">
         {attachments.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-2">
+          <div className="flex flex-wrap gap-2 mb-3">
             {attachments.map((f) => (
-              <span
+              <div
                 key={f.id}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs text-ink-400 bg-white/10"
+                className="inline-flex items-center gap-2 pl-2.5 pr-1.5 py-1 rounded-xl bg-accent-bg border border-accent-border hover:border-accent-light/40 transition-colors group"
               >
-                {f.file_name}
+                <FileText className="w-3.5 h-3.5 text-accent shrink-0" />
+                <span className="text-xs text-ink-300 max-w-35 truncate">
+                  {f.file_name}
+                </span>
                 <button
                   type="button"
                   onClick={() => handleRemove(f.id)}
-                  className="text-ink-600 hover:text-ink-100 transition-colors"
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-ink-600 hover:text-ink-100 hover:bg-white/10 transition-colors"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-2.5 h-2.5" />
                 </button>
-              </span>
+              </div>
             ))}
           </div>
         )}
@@ -125,10 +132,11 @@ export default function SearchForm({
           className="w-full bg-transparent text-ink-100 text-base placeholder:text-ink-600 focus:outline-none disabled:opacity-50 resize-none leading-7 scrollbar-hide pr-12"
           style={{ maxHeight: LINE_HEIGHT * MAX_ROWS + 'px', height: LINE_HEIGHT * 3 + 'px' }}
         />
-        <div className="absolute right-4 bottom-4 flex items-center gap-1.5">
+        <div className="absolute right-4 bottom-4 flex items-center gap-2">
           <input
             ref={fileInputRef}
             type="file"
+            accept={ALLOWED_EXTENSIONS.join(",")}
             className="hidden"
             onChange={handleFileChange}
           />
