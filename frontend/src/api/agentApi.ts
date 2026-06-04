@@ -78,7 +78,7 @@ function parseMessages(rows: ChatMessageFromDB[]): ChatMessage[] {
     .filter((r) => {
       if (r.role === "human" || r.role === "user") return true;
       const nodeName = r.node_name || extractNodeName(r.state);
-      return nodeName !== "supervisor";
+      return nodeName !== "supervisor" && nodeName !== "tools";
     })
     .map((r) => {
       const role: "human" | "ai" = (r.role === "user" || r.role === "human") ? "human" : "ai";
