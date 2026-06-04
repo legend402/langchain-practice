@@ -95,11 +95,14 @@ export default function SessionSidebar({
         </button>
 
         <div
-          className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-3 sidebar-content grid transition-[grid-template-rows,opacity] duration-200 ease-in-out"
+          className="flex-1 min-h-0 grid transition-[grid-template-rows] duration-200 ease-in-out"
           style={{ gridTemplateRows: historyCollapsed ? "0fr" : "1fr" }}
         >
           <div className="overflow-hidden">
-            <div className="transition-opacity duration-200" style={{ opacity: historyCollapsed ? 0 : 1 }}>
+            <div
+              className="h-full overflow-y-auto overflow-x-hidden px-2 pb-3 sidebar-content transition-opacity duration-200"
+              style={{ opacity: historyCollapsed ? 0 : 1 }}
+            >
           {sessions.length === 0 ? (
             <p className="text-xs text-ink-400 text-center py-8">暂无会话</p>
           ) : (
