@@ -11,7 +11,7 @@ from src.knowledge.service import (
     save_entry as _save_entry,
     delete_entry as _delete_entry,
     list_entries as _list_entries,
-    search_knowledge as _search_knowledge,
+    search_entries as _search_entries,
 )
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -98,13 +98,14 @@ async def delete_entry_route(
 async def search_route(
     body: dict,
     user: CurrentUser,
+    session: AsyncSession = Depends(get_session),
 ):
     """
-    检索知识库。
+    检索知识库，返回去重后的 entry 列表。
     """
     query = body.get("query", "")
-    top_k = body.get("top_k", 5)
+    top_k = body.get("top_k", 20)
     if not query:
         return Result.error("查询内容不能为空")
-    hits = await _search_knowledge(user.id, query, top_k)
-    return Result.success(hits)
+    entries = await _search_entries(session, user.id, query, top_k)
+    return Result.success(entries)

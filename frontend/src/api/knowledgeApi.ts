@@ -4,7 +4,6 @@ import type {
   CreateEntryRequest,
   PaginatedResult,
   SearchRequest,
-  SearchHit,
 } from "../types/knowledge";
 
 /**
@@ -52,12 +51,12 @@ async function deleteEntry(id: string): Promise<void> {
 }
 
 /**
- * 检索知识库
+ * 检索知识库，返回去重后的 entry 列表
  * @param body - 检索请求体
- * @returns 检索结果列表
+ * @returns 知识条目列表
  */
-async function search(body: SearchRequest): Promise<SearchHit[]> {
-  const { data } = await httpClient.post<SearchHit[]>("/knowledge/search", body);
+async function search(body: SearchRequest): Promise<KnowledgeEntry[]> {
+  const { data } = await httpClient.post<KnowledgeEntry[]>("/knowledge/search", body);
   return data;
 }
 

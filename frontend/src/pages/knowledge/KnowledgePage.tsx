@@ -64,17 +64,7 @@ export default function KnowledgePage() {
     }
     setSearching(true);
     try {
-      const hits = await knowledgeApi.search({ query: query.trim(), top_k: 50 });
-      const entryIds = [...new Set(hits.map((h) => h.entry_id))];
-      const entries: KnowledgeEntry[] = [];
-      for (const id of entryIds) {
-        try {
-          const entry = await knowledgeApi.getEntry(id);
-          entries.push(entry);
-        } catch {
-          // skip entries that fail to load
-        }
-      }
+      const entries = await knowledgeApi.search({ query: query.trim(), top_k: 20 });
       setSearchResults(entries);
     } catch {
       setSearchResults([]);

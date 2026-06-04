@@ -34,14 +34,6 @@ export interface SearchRequest {
   top_k?: number;
 }
 
-/** 知识库检索结果项 */
-export interface SearchHit {
-  entry_id: string;
-  chunk_index: number;
-  text: string;
-  score: number;
-}
-
 /** 分页结果 */
 export interface PaginatedResult<T> {
   items: T[];

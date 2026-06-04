@@ -58,9 +58,6 @@ def hybrid_search(
     hits: list[SearchHit] = []
     if results and results[0]:
         for hit in results[0]:
-            print(hit)
-            if hit["distance"] < 0.005:
-                continue
             hits.append(
                 SearchHit(
                     entry_id=hit["entity"]["entry_id"],

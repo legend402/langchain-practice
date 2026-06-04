@@ -1,4 +1,5 @@
 from uuid import UUID, uuid4
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from src.knowledge.chunker import Chunk, chunk_text
 from src.knowledge.embedding import aembed_texts
@@ -7,7 +8,6 @@ from src.knowledge.search import SearchHit, hybrid_search
 from src.service.db.db import KnowledgeEntry
 from src.utils.pagination import PaginatedResult, pagination
 from src.utils.reader import read
-
 
 async def save_entry(
   session: AsyncSession,
@@ -140,3 +140,36 @@ async def search_knowledge(
       SearchHit 列表
   """
   return hybrid_search(query, str(user_id), top_k)
+
+
+async def search_entries(
+    session: AsyncSession,
+    user_id: UUID,
+    query: str,
+    top_k: int = 5,
+) -> list[KnowledgeEntry]:
+  """
+  检索用户知识库并返回去重后的 entry 列表。
+  参数:
+      session: 数据库会话
+      user_id: 用户 ID
+      query: 查询文本
+      top_k: 搜索 chunk 数量
+  返回:
+      KnowledgeEntry 列表（按首次出现顺序排列）
+  """
+  hits = hybrid_search(query, str(user_id), top_k)
+  seen: set[str] = set()
+  entry_ids: list[str] = []
+  for h in hits:
+    if h.entry_id not in seen:
+      seen.add(h.entry_id)
+      entry_ids.append(h.entry_id)
+  if not entry_ids:
+    return []
+  result = await session.exec(
+    select(KnowledgeEntry)
+    .where(KnowledgeEntry.id.in_(entry_ids), KnowledgeEntry.user_id == user_id)
+  )
+  entry_map = {str(e.id): e for e in result.all()}
+  return [entry_map[eid] for eid in entry_ids if eid in entry_map]
