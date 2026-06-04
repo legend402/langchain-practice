@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Trash2, PanelLeftClose, PanelLeft, BookOpen, MessageSquare, ChevronDown } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
+import "overlayscrollbars/overlayscrollbars.css";
 import type { ChatSession } from "../types/agent";
 import logoSvg from "../assets/logo.svg";
 
@@ -99,8 +101,10 @@ export default function SessionSidebar({
           style={{ gridTemplateRows: historyCollapsed ? "0fr" : "1fr" }}
         >
           <div className="overflow-hidden">
-            <div
-              className="h-full overflow-y-auto overflow-x-hidden px-2 pb-3 sidebar-content transition-opacity duration-200"
+            <OverlayScrollbarsComponent
+              defer
+              options={{ scrollbars: { autoHide: "leave", autoHideDelay: 300 }, overflow: { x: "hidden" } }}
+              className="h-full px-2 pb-3 sidebar-content transition-opacity duration-200"
               style={{ opacity: historyCollapsed ? 0 : 1 }}
             >
           {sessions.length === 0 ? (
@@ -136,7 +140,7 @@ export default function SessionSidebar({
               ))}
             </div>
           )}
-            </div>
+            </OverlayScrollbarsComponent>
           </div>
         </div>
         <div className="px-3 py-3 border-t border-white/30 mt-auto">

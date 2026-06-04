@@ -48,6 +48,13 @@
   scrollbar-width: none;
 }
 
+.os-scrollbar .os-scrollbar-handle {
+  background: rgba(0, 0, 0, 0.12) !important;
+}
+.os-scrollbar .os-scrollbar-handle:hover {
+  background: rgba(0, 0, 0, 0.2) !important;
+}
+
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
