@@ -1,7 +1,7 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { useAgentChat } from "../hooks/useAgentChat";
 import { SidebarProvider, useSidebar } from "../contexts/SidebarContext";
+import { AgentChatProvider, useAgentChatContext } from "../contexts/AgentChatContext";
 import SessionSidebar from "../components/SessionSidebar";
 
 /**
@@ -9,8 +9,9 @@ import SessionSidebar from "../components/SessionSidebar";
  */
 function AppLayoutInner() {
   const auth = useAuth();
-  const chat = useAgentChat();
+  const chat = useAgentChatContext();
   const sidebar = useSidebar();
+  const navigate = useNavigate();
 
   return (
     <>
@@ -19,6 +20,7 @@ function AppLayoutInner() {
         activeThreadId={chat.activeThreadId}
         onSelect={(threadId) => {
           chat.loadSession(threadId);
+          navigate("/");
         }}
         onNew={chat.startNewSession}
         onDelete={chat.deleteSession}
@@ -35,13 +37,15 @@ function AppLayoutInner() {
 }
 
 /**
- * 应用主布局：包裹 SidebarProvider
+ * 应用主布局：包裹 SidebarProvider 和 AgentChatProvider
  */
 export default function AppLayout() {
   return (
     <div className="h-screen bg-background">
       <SidebarProvider>
-        <AppLayoutInner />
+        <AgentChatProvider>
+          <AppLayoutInner />
+        </AgentChatProvider>
       </SidebarProvider>
     </div>
   );

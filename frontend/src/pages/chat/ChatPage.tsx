@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAgentChat } from "../../hooks/useAgentChat";
+import { useAgentChatContext } from "../../contexts/AgentChatContext";
 import { useSidebar } from "../../contexts/SidebarContext";
 import type { FileUpload } from "../../types/knowledge";
 
@@ -10,7 +10,7 @@ import MessageList from "../../components/MessageList";
  * 聊天主页面：消息列表和搜索表单（侧边栏由 AppLayout 管理）
  */
 export default function ChatPage() {
-  const chat = useAgentChat();
+  const chat = useAgentChatContext();
   const sidebar = useSidebar();
   const [attachments, setAttachments] = useState<FileUpload[]>([]);
 
