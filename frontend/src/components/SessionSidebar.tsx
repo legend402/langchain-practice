@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Trash2, PanelLeftClose, PanelLeft, BookOpen, MessageSquare, ChevronDown, Sparkles } from "lucide-react";
+import { Trash2, PanelLeftClose, PanelLeft, BookOpen, MessageSquare, ChevronDown } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import type { ChatSession } from "../types/agent";
+import logoSvg from "../assets/logo.svg";
 
 interface SessionSidebarProps {
   sessions: ChatSession[];
@@ -49,8 +50,8 @@ export default function SessionSidebar({
       )}
       <aside className={`sidebar-panel ${collapsed ? "sidebar-collapsed" : ""}`}>
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-accent" />
+          <div className="flex items-center gap-2.5">
+            <img src={logoSvg} alt="Research" className="w-7 h-7" />
             <span className="text-base font-bold text-ink-100 sidebar-label">Research</span>
           </div>
           <button
