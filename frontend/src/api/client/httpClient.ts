@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:4030";
+const BASE_URL = `${location.protocol}//${location.hostname}:7900`;
 
 export interface ApiResponse<T = unknown> {
   ok: boolean;
