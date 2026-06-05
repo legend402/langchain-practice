@@ -85,39 +85,43 @@ def get_initial_state(state: AgentState):
 def get_state_message(node_name: str, state: dict) -> str:
     match node_name:
         case "supervisor":
-            return f"[supervisor]: {state["supervisor_reason"]}"
+            return f"[supervisor]: {state['supervisor_reason']}"
         case "search":
-            return f"[search]: 搜索完成，找到 {len(state["search_results"])} 篇相关资料"
+            return f"[search]: 搜索完成，找到 {len(state['search_results'])} 篇相关资料"
         case "read":
-            return f"[read]: 阅读完成，提取了 {len(state["read_notes"])} 条笔记"
+            return f"[read]: 阅读完成，提取了 {len(state['read_notes'])} 条笔记"
         case "analyze":
-            return f"[analyze]: {state["analysis_summary"]}"
+            return f"[analyze]: {state['analysis_summary']}"
         case "tag":
-            return f"[tag]: 标签生成完成，提取了{len(state["tags"]["keywords"])}个关键词，提取了{len(state["tags"]["topic"])}个主题标签，提取了{len(state["tags"]["domain"])}个领域标签"
+            kw = len(state['tags']['keywords'])
+            tp = len(state['tags']['topic'])
+            dm = len(state['tags']['domain'])
+            return f"[tag]: 标签生成完成，提取了{kw}个关键词，提取了{tp}个主题标签，提取了{dm}个领域标签"
         case "knowledge":
-            return f"[knowledge]: 提取了{len(state["knowledge_summary"]["key_points"])}个知识点，总结如下：{state["knowledge_summary"]["summary"]}"
+            pts = len(state['knowledge_summary']['key_points'])
+            summary = state['knowledge_summary']['summary']
+            return f"[knowledge]: 提取了{pts}个知识点，总结如下：{summary}"
         case "review":
-            review_result = state["review_result"]
-            review_status = review_result["status"]
-
+            review_result = state['review_result']
+            review_status = review_result['status']
             suggestions = (
                 "没有建议"
-                if len(review_result["suggestions"]) == False
-                else f"建议如下：{",".join(review_result["suggestions"])}"
+                if not review_result['suggestions']
+                else f"建议如下：{','.join(review_result['suggestions'])}"
             )
             issues = (
                 "没有问题"
-                if len(review_result["issues"]) == False
-                else f"问题如下：{",".join(review_result["issues"])}"
+                if not review_result['issues']
+                else f"问题如下：{','.join(review_result['issues'])}"
             )
             return f"[review]: 审核结果为{review_status},{suggestions},{issues}"
         case "human":
-            feedback = state["human_feedback"]
+            feedback = state['human_feedback']
             if feedback:
-                return f"[ai]: 用户反馈结果：{feedback["decision"]}，给出如下建议: {feedback["comment"]}"
-            return f"[human]: {state["human_message"]}"
+                return f"[ai]: 用户反馈结果：{feedback['decision']}，给出如下建议: {feedback['comment']}"
+            return f"[human]: {state['human_message']}"
         case "finalize":
-            return f"[finalize]: {state["final_answer"]}"
+            return f"[finalize]: {state['final_answer']}"
         case _:
             return ""
 

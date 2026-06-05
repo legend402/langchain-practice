@@ -19,7 +19,7 @@ def extract_json(text: str) -> dict:
       return json.loads(match.group())
     raise
 
-type Hook= Callable[[AgentState], Optional[AgentState]]
+Hook = Callable[[AgentState], Optional[AgentState]]
 
 def node_hook(before_hook: Optional[Hook] = None, after_hook: Optional[Hook] = None):
   def decorator(func):

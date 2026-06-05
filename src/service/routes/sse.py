@@ -9,7 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.config import AgentState
 
-type AgentType = CompiledStateGraph[AgentState, None, AgentState, AgentState]
+AgentType = CompiledStateGraph[AgentState, None, AgentState, AgentState]
 
 
 async def event_generator(

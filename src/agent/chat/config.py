@@ -19,9 +19,10 @@ def get_initial_chat_state(state: ChatState):
         messages.append(HumanMessage(state.get("user_query")))
     file_list = state.get("file_ids", [])
     if file_list and len(file_list):
+        file_ids_str = ", ".join(state.get("file_ids"))
         messages.append(
             HumanMessage(
-                f"[系统提示：用户上传了附件，file_id 为 {", ".join(state.get("file_ids"))}]"
+                f"[系统提示：用户上传了附件，file_id 为 {file_ids_str}]"
             )
         )
 
