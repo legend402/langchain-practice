@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createHashRouter } from "react-router-dom";
 import GuestRoute from "./GuestRoute";
 import ProtectedRoute from "./ProtectedRoute";
 import AuthLayout from "../layouts/AuthLayout";
@@ -12,7 +12,7 @@ import NotFound from "../pages/NotFound";
 /**
  * 应用路由表：定义所有路由、守卫和布局的嵌套关系
  */
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     element: <GuestRoute />,
     children: [
