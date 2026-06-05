@@ -2,7 +2,6 @@ import { useState } from "react";
 import Modal from "../../components/Modal";
 import FileUploader from "../../components/FileUploader";
 import { knowledgeApi } from "../../api/knowledgeApi";
-import { uploadApi } from "../../api/uploadApi";
 import type { FileUpload } from "../../types/knowledge";
 
 interface AddKnowledgeModalProps {
