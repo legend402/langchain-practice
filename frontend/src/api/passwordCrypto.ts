@@ -1,3 +1,4 @@
+import forge from "node-forge";
 import { httpClient } from "./client";
 
 const PUBLIC_KEY_URL = "/api/v1/auth/public-key";
@@ -11,38 +12,19 @@ interface PublicKeyResponse {
 
 interface PublicKeyCache {
   key_id: string;
-  cryptoKey: CryptoKey;
+  publicKey: forge.pki.rsa.PublicKey;
   expires_at: number;
 }
 
 let cache: PublicKeyCache | null = null;
 
 /**
- * 将 PEM 格式的公钥字符串转换为 ArrayBuffer
- *
- * @param pem - PEM 格式的公钥字符串（含 BEGIN/END PUBLIC KEY 标记）
- * @returns 解码后的 ArrayBuffer
- */
-function pemToArrayBuffer(pem: string): ArrayBuffer {
-  const b64 = pem
-    .replace(/-----BEGIN PUBLIC KEY-----/, "")
-    .replace(/-----END PUBLIC KEY-----/, "")
-    .replace(/\s/g, "");
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-/**
- * 从后端获取 RSA 公钥并导入为 CryptoKey
+ * 从后端获取 RSA 公钥并解析为 forge 公钥对象
  *
  * 公钥在内存中缓存，过期前 5 分钟自动刷新。
  * 使用 httpClient.raw() 发起请求，复用已有的 URL 解析逻辑。
  *
- * @returns 包含 key_id、CryptoKey 和过期时间戳的缓存对象
+ * @returns 包含 key_id、forge 公钥对象和过期时间戳的缓存对象
  * @throws 获取公钥失败时抛出错误
  */
 async function fetchPublicKey(): Promise<PublicKeyCache> {
@@ -57,27 +39,22 @@ async function fetchPublicKey(): Promise<PublicKeyCache> {
   const body = await res.json();
   const data: PublicKeyResponse = body.result ?? body;
 
-  const cryptoKey = await crypto.subtle.importKey(
-    "spki",
-    pemToArrayBuffer(data.public_key),
-    { name: "RSA-OAEP", hash: "SHA-256" },
-    false,
-    ["encrypt"],
-  );
+  const publicKey = forge.pki.publicKeyFromPem(data.public_key) as forge.pki.rsa.PublicKey;
 
   cache = {
     key_id: data.key_id,
-    cryptoKey,
+    publicKey,
     expires_at: new Date(data.expires_at).getTime(),
   };
   return cache;
 }
 
 /**
- * 使用 RSA-OAEP 加密密码
+ * 使用 RSA-OAEP (SHA-256) 加密密码
  *
- * 从后端获取公钥（带内存缓存），使用 Web Crypto API 进行 RSA-OAEP 加密。
+ * 从后端获取公钥（带内存缓存），使用 node-forge 进行 RSA-OAEP 加密。
  * 加密结果为 base64 编码的密文字符串。
+ * 不依赖 Web Crypto API，在 HTTP 环境下也可正常工作。
  *
  * @param password - 待加密的明文密码
  * @returns encrypted: base64 编码的 RSA 密文；key_id: 对应的公钥标识，后端用于查找私钥解密
@@ -85,15 +62,10 @@ async function fetchPublicKey(): Promise<PublicKeyCache> {
 export async function encryptPassword(
   password: string,
 ): Promise<{ encrypted: string; key_id: string }> {
-  const { key_id, cryptoKey } = await fetchPublicKey();
-  const encoded = new TextEncoder().encode(password);
-  const cipherBuffer = await crypto.subtle.encrypt(
-    { name: "RSA-OAEP" },
-    cryptoKey,
-    encoded,
-  );
-  const encrypted = btoa(
-    String.fromCharCode(...new Uint8Array(cipherBuffer)),
-  );
+  const { key_id, publicKey } = await fetchPublicKey();
+  const encryptedBytes = publicKey.encrypt(password, "RSA-OAEP", {
+    md: forge.md.sha256.create(),
+  });
+  const encrypted = forge.util.encode64(encryptedBytes);
   return { encrypted, key_id };
 }
