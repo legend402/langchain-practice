@@ -508,7 +508,11 @@ async def parse_document(
     if progress_callback:
         await progress_callback("parsing", "Docling 解析中...")
 
-    result = converter.convert(path)
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: converter.convert(path),
+    )
     docling_doc = result.document
 
     if progress_callback:
