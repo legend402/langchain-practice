@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import TypedDict, Literal, Optional, Any
 
 NextStep = Literal[
@@ -9,7 +10,7 @@ NextStep = Literal[
     "review",
     "human",
     "finalize",
-    "supervisor"
+    "supervisor",
 ]
 
 ReviewStatus = Literal[
@@ -152,3 +153,65 @@ class AgentState(TypedDict, total=False):
     max_iterations: int
     errors: list[str]
     trace: list[str]
+
+
+@dataclass
+class DocumentElement:
+    """
+    文档元素中间表示。
+    由 parser 单次遍历 DoclingDocument 产出，chunker 基于此做分块。
+    参数:
+        element_type: 元素类型（heading / paragraph / table / image / code）
+        text: 文本内容（表格为 Markdown，图片为描述文本）
+        page_number: 所在页码
+        heading_level: 标题层级（仅 heading 类型有效，1=H1, 2=H2...）
+        table_id: 表格唯一标识（仅 table 类型，如 T-001）
+    """
+
+    element_type: str
+    text: str
+    page_number: int
+    heading_level: int = 0
+    table_id: Optional[str] = None
+
+
+@dataclass
+class ChunkConfig:
+    """
+    结构化分块配置。
+    参数:
+        max_chunk_size: 最大字符数
+        chunk_overlap: 重叠字符数（仅段落间）
+        keep_table_intact: 表格是否不拆分
+        merge_short_paragraphs: 是否合并短段落
+    """
+
+    max_chunk_size: int = 1000
+    chunk_overlap: int = 100
+    keep_table_intact: bool = True
+    merge_short_paragraphs: bool = True
+
+
+@dataclass
+class StructuredChunk:
+    """
+    结构化分块结果。
+    参数:
+        text: chunk 文本内容
+        chunk_index: chunk 序号
+        page_start: 起始页码
+        page_end: 结束页码
+        heading_path: 标题路径列表
+        content_type: 内容类型（text/table/image/code）
+        table_id: 表格唯一标识（如有）
+        position: 文档内位置序号
+    """
+
+    text: str
+    chunk_index: int
+    page_start: int
+    page_end: int
+    heading_path: list[str]
+    content_type: str
+    table_id: Optional[str] = None
+    position: int = 0
