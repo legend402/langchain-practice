@@ -399,22 +399,7 @@ async def _walk_and_cache(
                 pass
 
             if not table_md.strip():
-                page_image = await generate_page_image(docling_doc, page, source_path)
-                if page_image is not None:
-                    page_size = None
-                    pages = getattr(docling_doc, "pages", {}) or {}
-                    page_item = pages.get(page)
-                    if page_item:
-                        page_size = getattr(page_item, "size", None)
-                    pdf_page_h = getattr(page_size, "height", 0) if page_size else 0
-
-                    if pdf_page_h > 0:
-                        img_bytes = _extract_table_image(page_image, pdf_page_h, item)
-                        if img_bytes:
-                            try:
-                                table_md = describe_image_with_glm4v(img_bytes)
-                            except Exception as e:
-                                logger.warning(f"表格图片多模态还原失败: {e}")
+                logger.info(f"空表格 {table_id} 跳过图片还原（页 {page}）")
 
             (tables_dir / f"{table_id}.md").write_text(table_md, encoding="utf-8")
 
@@ -520,7 +505,7 @@ async def parse_document(
     converter = get_converter()
 
     if progress_callback:
-        progress_callback("parsing", "Docling 解析中...")
+        await progress_callback("parsing", "Docling 解析中...")
 
     loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(
@@ -530,12 +515,12 @@ async def parse_document(
     docling_doc = result.document
 
     if progress_callback:
-        progress_callback("enriching_images", "图片描述生成中...")
+        await progress_callback("enriching_images", "图片描述生成中...")
 
     image_descriptions = await _enrich_images(docling_doc)
 
     if progress_callback:
-        progress_callback("walking_cache", "结构化遍历与缓存中...")
+        await progress_callback("walking_cache", "结构化遍历与缓存中...")
 
     elements = await _walk_and_cache(docling_doc, entry_id, image_descriptions, str(path))
 
