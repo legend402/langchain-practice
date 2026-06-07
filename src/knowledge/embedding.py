@@ -56,3 +56,38 @@ async def aembed_query(text: str) -> list[float]:
         向量，维度为 2048
   """
   return await get_embeddings().aembed_query(text)
+
+
+import asyncio
+
+EMBED_BATCH_SIZE = 64
+
+
+async def aembed_texts_batched(texts: list[str]) -> list[list[float]]:
+    """
+    分批异步向量化，每批 64 条，多批并发。
+    参数:
+        texts: 待编码的文本列表
+    返回:
+        向量列表，顺序与输入一致
+    """
+    if len(texts) <= EMBED_BATCH_SIZE:
+        return await aembed_texts(texts)
+
+    batches = [
+        texts[i : i + EMBED_BATCH_SIZE]
+        for i in range(0, len(texts), EMBED_BATCH_SIZE)
+    ]
+
+    semaphore = asyncio.Semaphore(3)
+
+    async def _embed_batch(batch: list[str]) -> list[list[float]]:
+        async with semaphore:
+            return await aembed_texts(batch)
+
+    results = await asyncio.gather(*[_embed_batch(b) for b in batches])
+
+    vectors: list[list[float]] = []
+    for batch_result in results:
+        vectors.extend(batch_result)
+    return vectors

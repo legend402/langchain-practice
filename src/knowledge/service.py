@@ -1,5 +1,7 @@
 import os
 import json
+import hashlib
+import asyncio
 import logging
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -9,8 +11,9 @@ from dataclasses import dataclass
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from src.config import PARSE_TASK_KEY_PREFIX, PARSE_TASK_TTL, ParseTaskStatus
 from src.knowledge.chunker import chunk_structured
-from src.knowledge.embedding import aembed_texts
+from src.knowledge.embedding import aembed_texts, aembed_texts_batched
 from src.knowledge.milvus import (
     delete_entry_chunks,
     get_milvus_client,
@@ -20,6 +23,7 @@ from src.knowledge.milvus import (
 )
 from src.knowledge.search import SearchHit, StructuredSearchHit, hybrid_search, hybrid_search_v2
 from src.service.db.db import KnowledgeEntry
+from src.service.db.redis import get_redis
 from src.utils.pagination import PaginatedResult, pagination
 from src.utils.reader import read
 
@@ -357,3 +361,179 @@ async def search_knowledge_v2(
         StructuredSearchHit 列表
     """
     return hybrid_search_v2(query, str(user_id), top_k)
+
+
+def _compute_file_hash(file_path: str) -> str:
+    """
+    计算文件的 SHA-256 哈希值。
+    参数:
+        file_path: 文件路径
+    返回:
+        哈希值十六进制字符串
+    """
+    sha256 = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+
+async def _update_task_status(
+    task_id: str,
+    status: ParseTaskStatus,
+    detail: str = "",
+    entry_id: str = "",
+) -> None:
+    """
+    更新 Redis 中的任务状态。
+    参数:
+        task_id: 任务 ID
+        status: 任务状态
+        detail: 状态描述
+        entry_id: 关联的知识条目 ID
+    """
+    redis = get_redis()
+    key = f"{PARSE_TASK_KEY_PREFIX}{task_id}"
+    payload = {
+        "status": status,
+        "detail": detail,
+        "entry_id": entry_id,
+    }
+    await redis.set(key, json.dumps(payload, ensure_ascii=False), ex=PARSE_TASK_TTL)
+
+
+async def get_task_status(task_id: str) -> dict | None:
+    """
+    查询任务状态。
+    参数:
+        task_id: 任务 ID
+    返回:
+        任务状态字典（status/detail/entry_id），不存在返回 None
+    """
+    redis = get_redis()
+    key = f"{PARSE_TASK_KEY_PREFIX}{task_id}"
+    data = await redis.get(key)
+    if data is None:
+        return None
+    try:
+        return json.loads(data)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+async def _run_parse_task(
+    task_id: str,
+    entry_id: str,
+    file_path: str,
+    user_id: UUID,
+    title: str,
+    source_type: str,
+    source_id: str | None,
+) -> None:
+    """
+    后台解析任务：解析 → 分块 → 向量化 → 存储。
+    参数:
+        task_id: 任务 ID
+        entry_id: 知识条目 ID
+        file_path: 文件路径
+        user_id: 用户 ID
+        title: 知识标题
+        source_type: 来源类型
+        source_id: 关联来源 ID
+    """
+    from src.knowledge.parser import parse_document
+    from src.knowledge.chunker import chunk_structured
+
+    try:
+        async def progress_cb(status: str, detail: str):
+            await _update_task_status(task_id, status, detail, entry_id)
+
+        parsed = await parse_document(file_path, entry_id, progress_callback=progress_cb)
+
+        await _update_task_status(task_id, "chunking", "结构化分块中...", entry_id)
+        chunks = chunk_structured(parsed.elements)
+
+        chunk_texts = [c.text for c in chunks]
+        preview = (chunk_texts[0][:200] + "...") if chunk_texts and len(chunk_texts[0]) > 200 else (chunk_texts[0] if chunk_texts else "")
+
+        await _update_task_status(task_id, "embedding", f"向量化中（{len(chunks)} 个分块）...", entry_id)
+        vectors = await aembed_texts_batched(chunk_texts)
+
+        await _update_task_status(task_id, "storing", "写入向量库...", entry_id)
+        uid = str(user_id)
+        col_name = get_or_create_v2_collection(uid)
+        client = get_milvus_client()
+
+        data = []
+        for chunk, vector in zip(chunks, vectors):
+            data.append({
+                "entry_id": entry_id,
+                "chunk_index": chunk.chunk_index,
+                "text": chunk.text,
+                "page_start": chunk.page_start,
+                "page_end": chunk.page_end,
+                "heading_path": json.dumps(chunk.heading_path, ensure_ascii=False),
+                "content_type": chunk.content_type,
+                "table_id": chunk.table_id or "",
+                "dense_vector": vector,
+            })
+
+        client.insert(collection_name=col_name, data=data)
+
+        from src.service.db.database import engine as _engine
+        async with AsyncSession(_engine) as session:
+            entry = KnowledgeEntry(
+                id=entry_id,
+                user_id=user_id,
+                title=title,
+                source_type=source_type,
+                source_id=source_id,
+                chunk_count=len(chunks),
+                content_preview=preview,
+            )
+            session.add(entry)
+            await session.commit()
+
+        await _update_task_status(task_id, "completed", "解析完成", entry_id)
+    except Exception as e:
+        logger.exception(f"解析任务失败 (task_id={task_id}): {e}")
+        await _update_task_status(task_id, "failed", str(e), entry_id)
+
+
+async def save_entry_v2_async(
+    user_id: UUID,
+    title: str,
+    file_path: str,
+    source_type: str = "file",
+    source_id: str | None = None,
+) -> str:
+    """
+    异步知识条目存入：立即返回 task_id，后台执行解析和存储。
+    通过 get_task_status(task_id) 查询进度。
+    参数:
+        user_id: 用户 ID
+        title: 知识标题
+        file_path: 文件路径
+        source_type: 来源类型
+        source_id: 关联来源 ID
+    返回:
+        task_id（用于查询进度）
+    """
+    entry_id = str(uuid4())
+    task_id = str(uuid4())
+
+    await _update_task_status(task_id, "pending", "等待解析...", entry_id)
+
+    asyncio.create_task(
+        _run_parse_task(
+            task_id=task_id,
+            entry_id=entry_id,
+            file_path=file_path,
+            user_id=user_id,
+            title=title,
+            source_type=source_type,
+            source_id=source_id,
+        )
+    )
+
+    return task_id

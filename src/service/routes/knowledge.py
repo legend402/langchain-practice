@@ -1,6 +1,9 @@
+import asyncio
+import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -13,6 +16,8 @@ from src.knowledge.service import (
     list_entries as _list_entries,
     search_knowledge_v2 as _search_knowledge_v2,
     search_entries as _search_entries,
+    save_entry_v2_async,
+    get_task_status,
 )
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -48,6 +53,34 @@ async def create_entry(
         source_id=body.source_id,
     )
     return Result.success(entry)
+
+
+@router.post("/entries/async")
+async def create_entry_async(
+    body: CreateEntryRequest,
+    user: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    异步存入知识条目（PDF 等大文件）。
+    立即返回 task_id，前端通过 SSE 轮询进度。
+    """
+    if not body.file_id:
+        return Result.error("异步上传必须提供 file_id")
+
+    from src.service.controller.FileUpload import get_file_record
+    record = await get_file_record(session, file_id=body.file_id)
+    if not record:
+        return Result.error("文件记录不存在")
+
+    task_id = await save_entry_v2_async(
+        user_id=user.id,
+        title=body.title,
+        file_path=record.file_path,
+        source_type=body.source_type,
+        source_id=body.source_id or body.file_id,
+    )
+    return Result.success({"task_id": task_id})
 
 
 @router.get("/entries")
@@ -124,3 +157,31 @@ async def search_route(
         }
         results.append(item)
     return Result.success(results)
+
+
+@router.get("/tasks/{task_id}/progress")
+async def task_progress(task_id: str):
+    """
+    SSE 推送解析任务进度。
+    前端通过 EventSource 连接，实时接收状态更新。
+    任务完成后自动断开。
+    """
+
+    async def _stream():
+        last_status = None
+        while True:
+            status = await get_task_status(task_id)
+            if status is None:
+                yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
+                break
+
+            if status != last_status:
+                yield f"data: {json.dumps(status)}\n\n"
+                last_status = dict(status)
+
+            if status.get("status") in ("completed", "failed"):
+                break
+
+            await asyncio.sleep(1)
+
+    return StreamingResponse(_stream(), media_type="text/event-stream")

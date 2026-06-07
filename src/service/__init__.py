@@ -12,6 +12,7 @@ import os
 
 from src.agent.chat.create_agent import create_chat_agent
 from src.knowledge.milvus import get_milvus_client
+from src.knowledge.parser import warmup_converter
 from src.service.auth.auth import create_fullauth
 from src.service.controller.FileUpload import ensure_upload_dir
 from src.service.db.database import engine, session_marker, init_db
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
 
     get_milvus_client()
     ensure_upload_dir()
+    await warmup_converter()
 
     yield
     await close_redis()

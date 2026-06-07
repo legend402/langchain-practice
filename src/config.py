@@ -215,3 +215,19 @@ class StructuredChunk:
     content_type: str
     table_id: Optional[str] = None
     position: int = 0
+
+
+PARSE_TASK_KEY_PREFIX = "parse_task:"
+PARSE_TASK_TTL = 3600
+
+ParseTaskStatus = Literal[
+    "pending",
+    "parsing",
+    "enriching_images",
+    "walking_cache",
+    "chunking",
+    "embedding",
+    "storing",
+    "completed",
+    "failed",
+]

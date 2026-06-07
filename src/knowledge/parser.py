@@ -2,6 +2,7 @@
 统一文档解析器。
 使用 Docling 解析 PDF/DOCX/MD/HTML 等格式，
 GLM-4V-Flash 处理图片描述，单次遍历输出 DocumentElement[] + 缓存。
+DocumentConverter 全局单例，页面图片按需生成。
 """
 
 import asyncio
@@ -23,6 +24,131 @@ from src.config import DocumentElement
 logger = logging.getLogger(__name__)
 
 _UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
+
+_converter: DocumentConverter | None = None
+_page_image_converter: DocumentConverter | None = None
+_page_image_cache: dict[str, dict[int, "object"]] = {}
+
+
+def _build_converter() -> DocumentConverter:
+    """
+    构建 DocumentConverter 实例。
+    基础配置：不生成页面图片、不开启 OCR、图片缩放 1.0。
+    """
+    pipeline_options = PdfPipelineOptions(
+        do_ocr=False,
+        do_table_structure=True,
+        generate_picture_images=True,
+        generate_page_images=False,
+        images_scale=1.0,
+    )
+    return DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
+        }
+    )
+
+
+def get_converter() -> DocumentConverter:
+    """
+    获取 DocumentConverter 全局单例。
+    参数:
+        无
+    返回:
+        DocumentConverter 实例
+    """
+    global _converter
+    if _converter is None:
+        _converter = _build_converter()
+    return _converter
+
+
+async def warmup_converter() -> None:
+    """
+    预热 DocumentConverter（加载模型权重）。
+    在 FastAPI lifespan 启动时调用，避免首次请求延迟。
+    """
+    get_converter()
+    logger.info("DocumentConverter 预热完成")
+
+
+def _get_page_image_converter() -> DocumentConverter:
+    """
+    获取用于生成页面图片的 DocumentConverter 单例。
+    独立于主 converter，配置 generate_page_images=True。
+    """
+    global _page_image_converter
+    if _page_image_converter is None:
+        pipeline_options = PdfPipelineOptions(
+            do_ocr=False,
+            do_table_structure=False,
+            generate_picture_images=False,
+            generate_page_images=True,
+            images_scale=2.0,
+        )
+        _page_image_converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
+            }
+        )
+    return _page_image_converter
+
+
+async def generate_page_image(
+    docling_doc: DoclingDocument,
+    page_no: int,
+    source_path: str | None = None,
+) -> "object | None":
+    """
+    按需为指定页面生成高分辨率图片。
+    使用缓存避免重复转换：同一 source_path 只转换一次，后续从缓存取页面图片。
+    参数:
+        docling_doc: 已解析的 Docling 文档对象
+        page_no: 页码（1-based）
+        source_path: 原始文件路径（用于缓存 key 和按需转换）
+    返回:
+        PIL Image 对象，失败返回 None
+    """
+    cache_key = source_path or ""
+
+    if cache_key and cache_key in _page_image_cache:
+        cached = _page_image_cache[cache_key].get(page_no)
+        if cached is not None:
+            return cached
+
+    try:
+        page_item = (docling_doc.pages or {}).get(page_no)
+        if page_item is not None and hasattr(page_item, "image") and page_item.image is not None:
+            return page_item.image.pil_image
+    except Exception:
+        pass
+
+    if not source_path or not Path(source_path).exists():
+        return None
+
+    try:
+        converter = _get_page_image_converter()
+
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: converter.convert(Path(source_path)),
+        )
+
+        if cache_key:
+            pages_cache: dict[int, object] = {}
+            for pn, pi in (result.document.pages or {}).items():
+                if hasattr(pi, "image") and pi.image is not None:
+                    pages_cache[pn] = pi.image.pil_image
+            _page_image_cache[cache_key] = pages_cache
+
+        page_item_new = (result.document.pages or {}).get(page_no)
+        if page_item_new and hasattr(page_item_new, "image") and page_item_new.image is not None:
+            return page_item_new.image.pil_image
+    except Exception as e:
+        logger.warning(f"按需生成页面图片失败 (page={page_no}): {e}")
+
+    return None
 
 
 @dataclass
@@ -163,13 +289,15 @@ def _get_page_number(item: object) -> int:
 
 
 def _extract_table_image(
-    docling_doc: DoclingDocument, table_item: TableItem
+    pil_page: "object",
+    pdf_page_h: float,
+    table_item: TableItem,
 ) -> bytes | None:
     """
-    从 Docling 页面图片中裁剪表格区域，返回 JPEG 字节。
-    处理图片型表格（Docling 结构识别失败，num_rows=0 的情况）。
+    从页面图片中裁剪表格区域，返回 JPEG 字节。
     参数:
-        docling_doc: Docling 文档对象
+        pil_page: 页面的 PIL Image
+        pdf_page_h: PDF 页面高度（用于坐标翻转）
         table_item: TableItem 元素
     返回:
         表格区域的 JPEG 字节，失败返回 None
@@ -178,26 +306,7 @@ def _extract_table_image(
         prov = getattr(table_item, "prov", []) or []
         if not prov:
             return None
-        page_no = prov[0].page_no
         bbox = prov[0].bbox
-
-        pages = getattr(docling_doc, "pages", {}) or {}
-        page_item = pages.get(page_no)
-        if (
-            page_item is None
-            or not hasattr(page_item, "image")
-            or page_item.image is None
-        ):
-            return None
-
-        pil_page = page_item.image.pil_image
-        if pil_page is None:
-            return None
-
-        page_size = getattr(page_item, "size", None)
-        pdf_page_h = getattr(page_size, "height", None) if page_size else None
-        if pdf_page_h is None:
-            return None
 
         l, t, r, b = bbox.l, bbox.t, bbox.r, bbox.b
 
@@ -229,17 +338,20 @@ def _extract_table_image(
         return None
 
 
-def _walk_and_cache(
+async def _walk_and_cache(
     docling_doc: DoclingDocument,
     entry_id: str,
     image_descriptions: dict[str, str],
+    source_path: str | None = None,
 ) -> list[DocumentElement]:
     """
     对 DoclingDocument 做唯一一次遍历，同时产出 DocumentElement[] 和缓存文件。
+    空表格时按需生成页面图片并裁剪。
     参数:
         docling_doc: Docling 文档对象
         entry_id: 知识条目 ID（用于缓存路径）
         image_descriptions: 图片 self_ref → 描述文本的字典
+        source_path: 原始文件路径（用于按需生成页面图片的缓存 key）
     返回:
         DocumentElement 列表
     """
@@ -287,12 +399,22 @@ def _walk_and_cache(
                 pass
 
             if not table_md.strip():
-                img_bytes = _extract_table_image(docling_doc, item)
-                if img_bytes:
-                    try:
-                        table_md = describe_image_with_glm4v(img_bytes)
-                    except Exception as e:
-                        logger.warning(f"表格图片多模态还原失败: {e}")
+                page_image = await generate_page_image(docling_doc, page, source_path)
+                if page_image is not None:
+                    page_size = None
+                    pages = getattr(docling_doc, "pages", {}) or {}
+                    page_item = pages.get(page)
+                    if page_item:
+                        page_size = getattr(page_item, "size", None)
+                    pdf_page_h = getattr(page_size, "height", 0) if page_size else 0
+
+                    if pdf_page_h > 0:
+                        img_bytes = _extract_table_image(page_image, pdf_page_h, item)
+                        if img_bytes:
+                            try:
+                                table_md = describe_image_with_glm4v(img_bytes)
+                            except Exception as e:
+                                logger.warning(f"表格图片多模态还原失败: {e}")
 
             (tables_dir / f"{table_id}.md").write_text(table_md, encoding="utf-8")
 
@@ -373,13 +495,18 @@ def _walk_and_cache(
     return elements
 
 
-async def parse_document(file_path: str, entry_id: str) -> ParsedDocument:
+async def parse_document(
+    file_path: str,
+    entry_id: str,
+    progress_callback: "callable | None" = None,
+) -> ParsedDocument:
     """
     统一文档解析入口。
-    Docling 解析 → GLM-4V-Flash 图片描述 → 单次遍历产出 DocumentElement[] + 缓存。
+    使用全局单例 DocumentConverter，convert 在线程池执行不阻塞事件循环。
     参数:
         file_path: 原始文件路径
         entry_id: 知识条目 ID（用于缓存路径）
+        progress_callback: 进度回调函数，接收 (status: str, detail: str)
     返回:
         ParsedDocument 结构化文档
     """
@@ -390,25 +517,27 @@ async def parse_document(file_path: str, entry_id: str) -> ParsedDocument:
     suffix = path.suffix.lower()
     file_type = suffix.lstrip(".")
 
-    pipeline_options = PdfPipelineOptions(
-        do_ocr=False,
-        do_table_structure=True,
-        generate_picture_images=True,
-        generate_page_images=True,
-        images_scale=2.0,
-    )
+    converter = get_converter()
 
-    converter = DocumentConverter(
-        format_options={
-            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
-        }
+    if progress_callback:
+        progress_callback("parsing", "Docling 解析中...")
+
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: converter.convert(path),
     )
-    result = converter.convert(path)
     docling_doc = result.document
+
+    if progress_callback:
+        progress_callback("enriching_images", "图片描述生成中...")
 
     image_descriptions = await _enrich_images(docling_doc)
 
-    elements = _walk_and_cache(docling_doc, entry_id, image_descriptions)
+    if progress_callback:
+        progress_callback("walking_cache", "结构化遍历与缓存中...")
+
+    elements = await _walk_and_cache(docling_doc, entry_id, image_descriptions, str(path))
 
     if image_descriptions:
         desc_path = Path(_UPLOAD_DIR) / "parsed" / entry_id / "image_descriptions.json"
