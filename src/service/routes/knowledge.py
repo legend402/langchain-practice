@@ -8,9 +8,10 @@ from src.service.auth.deps import CurrentUser
 from src.service.db.database import get_session
 from src.service.result import Result
 from src.knowledge.service import (
-    save_entry as _save_entry,
-    delete_entry as _delete_entry,
+    save_entry_v2 as _save_entry,
+    delete_entry_v2 as _delete_entry,
     list_entries as _list_entries,
+    search_knowledge_v2 as _search_knowledge_v2,
     search_entries as _search_entries,
 )
 
@@ -101,11 +102,25 @@ async def search_route(
     session: AsyncSession = Depends(get_session),
 ):
     """
-    检索知识库，返回去重后的 entry 列表。
+    检索知识库，返回带页码、章节等溯源信息的结果。
     """
     query = body.get("query", "")
     top_k = body.get("top_k", 20)
     if not query:
         return Result.error("查询内容不能为空")
-    entries = await _search_entries(session, user.id, query, top_k)
-    return Result.success(entries)
+    hits = await _search_knowledge_v2(user.id, query, top_k)
+    results = []
+    for h in hits:
+        item = {
+            "entry_id": h.entry_id,
+            "chunk_index": h.chunk_index,
+            "text": h.text,
+            "score": h.score,
+            "page_start": h.page_start,
+            "page_end": h.page_end,
+            "heading_path": h.heading_path,
+            "content_type": h.content_type,
+            "table_id": h.table_id,
+        }
+        results.append(item)
+    return Result.success(results)

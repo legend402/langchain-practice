@@ -11,7 +11,7 @@ async def save_to_knowledge(title: str, content: str) -> str:
   """
   from src.service.db.database import engine
   from sqlmodel.ext.asyncio.session import AsyncSession
-  from src.knowledge.service import save_entry
+  from src.knowledge.service import save_entry_v2
   from src.utils.agent import get_current_user_id
 
   user_id = get_current_user_id()
@@ -20,7 +20,7 @@ async def save_to_knowledge(title: str, content: str) -> str:
 
   from uuid import UUID
   async with AsyncSession(engine) as session:
-      entry = await save_entry(
+      entry = await save_entry_v2(
           session=session,
           user_id=UUID(user_id),
           title=title,
