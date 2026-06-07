@@ -1,7 +1,7 @@
 from langchain.messages import SystemMessage
 from src.agent.chat.config import ChatState
 from src.llm import init_model
-from src.tools import knowledge_search, read_file, save_to_knowledge
+from src.tools import knowledge_search, read_file, save_to_knowledge, read_pages, extract_tables
 from src.tools.research import research
 
 CHAT_SYSTEM_PROMPT = """
@@ -11,6 +11,8 @@ CHAT_SYSTEM_PROMPT = """
 3. 当用户需要深度研究时，调用 research 工具
 4. 调用 read_file 读取用户上传的附件内容
 5. 调用 save_to_knowledge 将内容存入知识库
+6. 调用 read_pages 读取文档的原文
+7. 调用 extract_tables 从文档中抽取表格
 
 规则：
 - 用户消息附带附件时，必须先调用 read_file 获取文件内容，然后根据用户意图处理
@@ -20,6 +22,7 @@ CHAT_SYSTEM_PROMPT = """
 - knowledge_search 有结果时，结合检索结果回答，无需再 research
 - knowledge_search 无结果且需要深度研究时，再调用 research
 - 触发 research 的场景：用户要求总结、分析、深度研究某个话题；用户消息以 /research 开头；需要搜索多个来源并综合分析
+- 当引用知识库内容时，必须附注来源。引用格式：文本内容：（来源：《文档标题》第X页 "章节名"）；表格内容：（来源：《文档标题》第X页 表格T-001）。如果检索结果中没有页码信息，则省略页码部分
 
 回复使用中文。
 """
@@ -27,7 +30,7 @@ CHAT_SYSTEM_PROMPT = """
 
 async def chat_node(state: ChatState) -> dict:
     llm = init_model()
-    llm_with_tools = llm.bind_tools([research, knowledge_search, read_file, save_to_knowledge])
+    llm_with_tools = llm.bind_tools([research, knowledge_search, read_file, save_to_knowledge, read_pages, extract_tables])
 
     state_messages = state.get("messages", [])
     existing_messages = []
