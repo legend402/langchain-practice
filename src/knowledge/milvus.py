@@ -115,3 +115,112 @@ def delete_entry_chunks(user_id: str, entry_id: str) -> None:
     collection_name=col_name,
     filter=f"entry_id == '{entry_id}'"
   )
+
+def _v2_collection_name(user_id: str) -> str:
+    """v2 collection 名称，带 _v2 后缀。"""
+    return f"knowledge_v2_{user_id.replace('-', '_')}"
+
+def get_or_create_v2_collection(user_id: str) -> str:
+    """
+    获取或创建 v2 知识库 collection，包含扩展元数据字段。
+    新增字段：page_start, page_end, heading_path, content_type, table_id。
+    参数:
+        user_id: 用户 ID 字符串
+    返回:
+        collection 名称
+    """
+    client = get_milvus_client()
+    col_name = _v2_collection_name(user_id)
+
+    if client.has_collection(col_name):
+        _ensure_indexes(client, col_name)
+        client.load_collection(col_name)
+        return col_name
+
+    schema = CollectionSchema(fields=[
+        FieldSchema(
+            name="pk",
+            dtype=DataType.VARCHAR,
+            is_primary=True,
+            auto_id=True,
+            max_length=100,
+        ),
+        FieldSchema(
+            name="entry_id",
+            dtype=DataType.VARCHAR,
+            max_length=100,
+        ),
+        FieldSchema(
+            name="chunk_index",
+            dtype=DataType.INT32,
+        ),
+        FieldSchema(
+            name="text",
+            dtype=DataType.VARCHAR,
+            max_length=65535,
+            enable_analyzer=True,
+        ),
+        FieldSchema(
+            name="page_start",
+            dtype=DataType.INT64,
+        ),
+        FieldSchema(
+            name="page_end",
+            dtype=DataType.INT64,
+        ),
+        FieldSchema(
+            name="heading_path",
+            dtype=DataType.VARCHAR,
+            max_length=512,
+        ),
+        FieldSchema(
+            name="content_type",
+            dtype=DataType.VARCHAR,
+            max_length=32,
+        ),
+        FieldSchema(
+            name="table_id",
+            dtype=DataType.VARCHAR,
+            max_length=64,
+        ),
+        FieldSchema(
+            name="dense_vector",
+            dtype=DataType.FLOAT_VECTOR,
+            dim=DENSE_DIM,
+        ),
+        FieldSchema(
+            name="sparse_vector",
+            dtype=DataType.SPARSE_FLOAT_VECTOR,
+        ),
+    ])
+
+    bm25_function = Function(
+        name="text_bm25",
+        input_field_names=["text"],
+        output_field_names=["sparse_vector"],
+        function_type=FunctionType.BM25,
+    )
+    schema.add_function(bm25_function)
+
+    client.create_collection(collection_name=col_name, schema=schema)
+    _ensure_indexes(client, col_name)
+    client.load_collection(col_name)
+
+    return col_name
+
+def delete_v2_entry_chunks(user_id: str, entry_id: str) -> None:
+    """
+    从 v2 collection 中删除指定 entry 的所有 chunks。
+    参数:
+        user_id: 用户 ID
+        entry_id: 知识条目 ID
+    """
+    client = get_milvus_client()
+    col_name = _v2_collection_name(user_id)
+
+    if not client.has_collection(col_name):
+        return
+    client.delete(
+        collection_name=col_name,
+        filter=f"entry_id == '{entry_id}'",
+    )
