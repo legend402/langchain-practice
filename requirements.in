@@ -16,7 +16,7 @@ sqlmodel
 alembic
 asyncpg
 greenlet
-fastapi-fullauth[sqlmodel,redis]
+fastapi-fullauth[sqlmodel,redis]>=0.13
 beautifulsoup4
 lxml
 python-docx
@@ -24,3 +24,7 @@ pymilvus
 charset-normalizer
 docling
 zhipuai>=2
+cryptography
+pyjwt>=2.12.1
+# 注意：zhipuai 声称 pyjwt<2.9.0 但实际完全兼容 2.13+
+# 需要用 pip install --no-deps zhipuai 绕过版本上限约束
