@@ -29,6 +29,8 @@ from src.utils.reader import read
 
 logger = logging.getLogger(__name__)
 
+_ACTIVE_TASKS_KEY = "parse_active_tasks:"
+
 
 @dataclass
 class _SimpleChunk:
@@ -383,14 +385,17 @@ async def _update_task_status(
     status: ParseTaskStatus,
     detail: str = "",
     entry_id: str = "",
+    user_id: str = "",
 ) -> None:
     """
     更新 Redis 中的任务状态。
+    同时维护用户的活跃任务集合（进行中的任务）。
     参数:
         task_id: 任务 ID
         status: 任务状态
         detail: 状态描述
         entry_id: 关联的知识条目 ID
+        user_id: 用户 ID（用于活跃任务集合）
     """
     redis = get_redis()
     key = f"{PARSE_TASK_KEY_PREFIX}{task_id}"
@@ -398,8 +403,17 @@ async def _update_task_status(
         "status": status,
         "detail": detail,
         "entry_id": entry_id,
+        "title": "",
     }
     await redis.set(key, json.dumps(payload, ensure_ascii=False), ex=PARSE_TASK_TTL)
+
+    if user_id:
+        active_key = f"{_ACTIVE_TASKS_KEY}{user_id}"
+        if status in ("completed", "failed"):
+            await redis.srem(active_key, task_id)
+        elif status not in ("pending",):
+            await redis.sadd(active_key, task_id)
+            await redis.expire(active_key, PARSE_TASK_TTL)
 
 
 async def get_task_status(task_id: str) -> dict | None:
@@ -446,20 +460,20 @@ async def _run_parse_task(
 
     try:
         async def progress_cb(status: str, detail: str):
-            await _update_task_status(task_id, status, detail, entry_id)
+            await _update_task_status(task_id, status, detail, entry_id, str(user_id))
 
         parsed = await parse_document(file_path, entry_id, progress_callback=progress_cb)
 
-        await _update_task_status(task_id, "chunking", "结构化分块中...", entry_id)
+        await _update_task_status(task_id, "chunking", "结构化分块中...", entry_id, str(user_id))
         chunks = chunk_structured(parsed.elements)
 
         chunk_texts = [c.text for c in chunks]
         preview = (chunk_texts[0][:200] + "...") if chunk_texts and len(chunk_texts[0]) > 200 else (chunk_texts[0] if chunk_texts else "")
 
-        await _update_task_status(task_id, "embedding", f"向量化中（{len(chunks)} 个分块）...", entry_id)
+        await _update_task_status(task_id, "embedding", f"向量化中（{len(chunks)} 个分块）...", entry_id, str(user_id))
         vectors = await aembed_texts_batched(chunk_texts)
 
-        await _update_task_status(task_id, "storing", "写入向量库...", entry_id)
+        await _update_task_status(task_id, "storing", "写入向量库...", entry_id, str(user_id))
         uid = str(user_id)
         col_name = get_or_create_v2_collection(uid)
         client = get_milvus_client()
@@ -494,10 +508,10 @@ async def _run_parse_task(
             session.add(entry)
             await session.commit()
 
-        await _update_task_status(task_id, "completed", "解析完成", entry_id)
+        await _update_task_status(task_id, "completed", "解析完成", entry_id, str(user_id))
     except Exception as e:
         logger.exception(f"解析任务失败 (task_id={task_id}): {e}")
-        await _update_task_status(task_id, "failed", str(e), entry_id)
+        await _update_task_status(task_id, "failed", str(e), entry_id, str(user_id))
 
 
 async def save_entry_v2_async(
@@ -522,7 +536,11 @@ async def save_entry_v2_async(
     entry_id = str(uuid4())
     task_id = str(uuid4())
 
-    await _update_task_status(task_id, "pending", "等待解析...", entry_id)
+    redis = get_redis()
+    await redis.sadd(f"{_ACTIVE_TASKS_KEY}{str(user_id)}", task_id)
+    await redis.expire(f"{_ACTIVE_TASKS_KEY}{str(user_id)}", PARSE_TASK_TTL)
+
+    await _update_task_status(task_id, "pending", "等待解析...", entry_id, str(user_id))
 
     asyncio.create_task(
         _run_parse_task(
@@ -537,3 +555,34 @@ async def save_entry_v2_async(
     )
 
     return task_id
+
+
+async def list_active_tasks(user_id: UUID) -> list[dict]:
+    """
+    列出用户所有进行中的解析任务。
+    页面刷新后调用此函数恢复 SSE 连接。
+    参数:
+        user_id: 用户 ID
+    返回:
+        活跃任务列表（task_id/status/detail/entry_id）
+    """
+    redis = get_redis()
+    active_key = f"{_ACTIVE_TASKS_KEY}{str(user_id)}"
+    task_ids = await redis.smembers(active_key)
+    if not task_ids:
+        return []
+
+    tasks = []
+    for tid_bytes in task_ids:
+        tid = tid_bytes if isinstance(tid_bytes, str) else tid_bytes.decode()
+        status = await get_task_status(tid)
+        if status is not None:
+            status["task_id"] = tid
+            tasks.append(status)
+
+            if status.get("status") in ("completed", "failed"):
+                await redis.srem(active_key, tid)
+        else:
+            await redis.srem(active_key, tid)
+
+    return tasks

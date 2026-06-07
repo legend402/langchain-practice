@@ -2,6 +2,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { SidebarProvider, useSidebar } from "../contexts/SidebarContext";
 import { AgentChatProvider, useAgentChatContext } from "../contexts/AgentChatContext";
+import { ParseTaskProvider } from "../contexts/ParseTaskContext";
 import SessionSidebar from "../components/SessionSidebar";
 
 /**
@@ -44,7 +45,9 @@ export default function AppLayout() {
     <div className="h-screen bg-background">
       <SidebarProvider>
         <AgentChatProvider>
-          <AppLayoutInner />
+          <ParseTaskProvider>
+            <AppLayoutInner />
+          </ParseTaskProvider>
         </AgentChatProvider>
       </SidebarProvider>
     </div>

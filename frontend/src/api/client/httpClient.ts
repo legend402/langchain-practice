@@ -39,6 +39,10 @@ export class HttpClient {
   private readonly _requestInterceptors: RequestInterceptor[] = [];
   private readonly _responseInterceptors: ResponseInterceptor[] = [];
 
+  getBaseUrl(): string {
+    return BASE_URL;
+  }
+
   /**
    * 注册请求拦截器，返回注销函数
    */

@@ -2,6 +2,7 @@ import { useState } from "react";
 import Modal from "../../components/Modal";
 import FileUploader from "../../components/FileUploader";
 import { knowledgeApi } from "../../api/knowledgeApi";
+import { useParseTask } from "../../contexts/ParseTaskContext";
 import type { FileUpload } from "../../types/knowledge";
 
 interface AddKnowledgeModalProps {
@@ -12,12 +13,6 @@ interface AddKnowledgeModalProps {
 
 type InputMode = "manual" | "upload";
 
-/**
- * 添加知识条目模态框
- * @param open 是否显示
- * @param onClose 关闭回调
- * @param onSuccess 创建成功回调
- */
 export default function AddKnowledgeModal({ open, onClose, onSuccess }: AddKnowledgeModalProps) {
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<InputMode>("manual");
@@ -25,6 +20,7 @@ export default function AddKnowledgeModal({ open, onClose, onSuccess }: AddKnowl
   const [files, setFiles] = useState<FileUpload[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { startTask } = useParseTask();
 
   function resetForm() {
     setTitle("");
@@ -54,6 +50,8 @@ export default function AddKnowledgeModal({ open, onClose, onSuccess }: AddKnowl
     try {
       if (mode === "manual") {
         await knowledgeApi.createEntry({ title: title.trim(), content: content.trim() });
+        onSuccess();
+        handleClose();
       } else {
         const uploadedFile = files[0];
         if (!uploadedFile) {
@@ -61,14 +59,14 @@ export default function AddKnowledgeModal({ open, onClose, onSuccess }: AddKnowl
           setSubmitting(false);
           return;
         }
-        await knowledgeApi.createEntry({
+        const { task_id } = await knowledgeApi.createEntryAsync({
           title: title.trim(),
           file_id: uploadedFile.id,
           source_type: "file",
         });
+        startTask(task_id);
+        handleClose();
       }
-      onSuccess();
-      handleClose();
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "创建失败";
       setError(message);
@@ -143,7 +141,7 @@ export default function AddKnowledgeModal({ open, onClose, onSuccess }: AddKnowl
           disabled={!canSubmit}
           className="w-full py-2.5 rounded-xl bg-accent text-white font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
         >
-          {submitting ? "提交中..." : "添加"}
+          {submitting ? "提交中..." : mode === "upload" ? "开始解析" : "添加"}
         </button>
       </div>
     </Modal>

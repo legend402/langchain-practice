@@ -1,17 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
-import { BookOpen, Plus, Search, Trash2, FileText, Type } from "lucide-react";
+import { BookOpen, Plus, Search, Trash2, FileText, Type, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { usePagination } from "../../hooks/usePagination";
 import { useSidebar } from "../../contexts/SidebarContext";
+import { useParseTask } from "../../contexts/ParseTaskContext";
 import { knowledgeApi } from "../../api/knowledgeApi";
 import Pagination from "../../components/Pagination";
 import AddKnowledgeModal from "./AddKnowledgeModal";
 import type { KnowledgeEntry } from "../../types/knowledge";
+import { PARSE_STATUS_LABELS } from "../../types/knowledge";
 
-/**
- * 格式化时间为相对时间描述
- * @param dateStr ISO 时间字符串
- * @returns 格式化后的时间描述
- */
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
   const now = new Date();
@@ -34,9 +31,6 @@ const sourceTypeMap: Record<string, { label: string; icon: typeof FileText }> = 
   file: { label: "文件", icon: FileText },
 };
 
-/**
- * 知识库管理页面：展示知识条目列表，支持搜索、添加和删除
- */
 export default function KnowledgePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<KnowledgeEntry[]>([]);
@@ -55,6 +49,8 @@ export default function KnowledgePage() {
     fetchFn: knowledgeApi.listEntries,
     initialSize: 12,
   });
+
+  const { tasks } = useParseTask();
 
   const doSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
@@ -78,6 +74,13 @@ export default function KnowledgePage() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery, doSearch]);
+
+  useEffect(() => {
+    if (tasks.some((t) => t.status === "completed")) {
+      const timer = setTimeout(refresh, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [tasks, refresh]);
 
   async function handleDelete(id: string) {
     if (!window.confirm("确定要删除该知识条目吗？")) return;
@@ -129,6 +132,38 @@ export default function KnowledgePage() {
           </button>
         </div>
       </header>
+
+      {tasks.length > 0 && (
+        <div className="px-6 pt-4 space-y-2">
+          {tasks.map((task) => {
+            const isFinal = task.status === "completed" || task.status === "failed";
+            return (
+              <div
+                key={task.task_id}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all ${
+                  isFinal
+                    ? task.status === "completed"
+                      ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                      : "bg-red-500/10 text-red-400 border border-red-500/20"
+                    : "glass-card text-ink-200 border border-accent/20"
+                }`}
+              >
+                {isFinal ? (
+                  task.status === "completed" ? (
+                    <CheckCircle2 className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-400" />
+                  )
+                ) : (
+                  <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                )}
+                <span>{PARSE_STATUS_LABELS[task.status]}</span>
+                {task.detail && <span className="text-ink-400 ml-1">— {task.detail}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <main className="flex-1 px-6 py-6">
         {isInitialLoading && (

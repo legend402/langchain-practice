@@ -18,6 +18,7 @@ from src.knowledge.service import (
     search_entries as _search_entries,
     save_entry_v2_async,
     get_task_status,
+    list_active_tasks,
 )
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -157,6 +158,16 @@ async def search_route(
         }
         results.append(item)
     return Result.success(results)
+
+
+@router.get("/tasks/active")
+async def get_active_tasks(user: CurrentUser):
+    """
+    获取当前用户所有进行中的解析任务。
+    前端页面刷新后调用此接口恢复进度监听。
+    """
+    tasks = await list_active_tasks(user.id)
+    return Result.success(tasks)
 
 
 @router.get("/tasks/{task_id}/progress")

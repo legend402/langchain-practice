@@ -1,27 +1,24 @@
 import { httpClient } from "./client";
+import { tokenStorage } from "./client";
 import type {
   KnowledgeEntry,
   CreateEntryRequest,
   PaginatedResult,
   SearchRequest,
+  AsyncEntryResponse,
+  ParseTask,
 } from "../types/knowledge";
 
-/**
- * 创建知识条目
- * @param body - 创建知识条目请求体
- * @returns 新创建的知识条目
- */
 async function createEntry(body: CreateEntryRequest): Promise<KnowledgeEntry> {
   const { data } = await httpClient.post<KnowledgeEntry>("/knowledge/entries", body);
   return data;
 }
 
-/**
- * 获取知识条目列表（分页）
- * @param page - 页码，默认 1
- * @param size - 每页条数，默认 20
- * @returns 分页知识条目结果
- */
+async function createEntryAsync(body: CreateEntryRequest): Promise<AsyncEntryResponse> {
+  const { data } = await httpClient.post<AsyncEntryResponse>("/knowledge/entries/async", body);
+  return data;
+}
+
 async function listEntries(
   page: number = 1,
   size: number = 20,
@@ -32,38 +29,38 @@ async function listEntries(
   return data;
 }
 
-/**
- * 获取单个知识条目详情
- * @param id - 知识条目 ID
- * @returns 知识条目详情
- */
 async function getEntry(id: string): Promise<KnowledgeEntry> {
   const { data } = await httpClient.get<KnowledgeEntry>(`/knowledge/entries/${id}`);
   return data;
 }
 
-/**
- * 删除知识条目
- * @param id - 知识条目 ID
- */
 async function deleteEntry(id: string): Promise<void> {
   await httpClient.delete(`/knowledge/entries/${id}`);
 }
 
-/**
- * 检索知识库，返回去重后的 entry 列表
- * @param body - 检索请求体
- * @returns 知识条目列表
- */
 async function search(body: SearchRequest): Promise<KnowledgeEntry[]> {
   const { data } = await httpClient.post<KnowledgeEntry[]>("/knowledge/search", body);
   return data;
 }
 
+async function listActiveTasks(): Promise<ParseTask[]> {
+  const { data } = await httpClient.get<ParseTask[]>("/knowledge/tasks/active");
+  return data;
+}
+
+function watchTaskProgress(taskId: string): EventSource {
+  const token = tokenStorage.getAccessToken();
+  const url = `${httpClient.getBaseUrl()}/knowledge/tasks/${taskId}/progress?token=${token}`;
+  return new EventSource(url);
+}
+
 export const knowledgeApi = {
   createEntry,
+  createEntryAsync,
   listEntries,
   getEntry,
   deleteEntry,
   search,
+  listActiveTasks,
+  watchTaskProgress,
 };
