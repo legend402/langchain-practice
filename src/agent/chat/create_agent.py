@@ -5,13 +5,13 @@ from langgraph.prebuilt import ToolNode, tools_condition
 
 from src.agent.chat.config import ChatState
 from src.agent.chat.nodes.chat import chat_node
-from src.tools import research, knowledge_search, read_file, save_to_knowledge
+from src.tools import research, knowledge_search, read_file, save_to_knowledge, read_pages, extract_tables
 
 
 def _build_chat_graph(checkpointer: AsyncPostgresSaver):
     builder = StateGraph(ChatState)
     builder.add_node("chat", chat_node)
-    builder.add_node("tools", ToolNode([research, knowledge_search, read_file, save_to_knowledge]))
+    builder.add_node("tools", ToolNode([research, knowledge_search, read_file, save_to_knowledge, read_pages, extract_tables]))
 
     builder.add_edge(START, "chat")
     builder.add_edge("tools", "chat")
