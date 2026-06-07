@@ -43,10 +43,20 @@ src/
 │       └── knowledge.py     # /knowledge/* 路由（知识库 CRUD + 检索）
 ├── knowledge/               # 知识库核心引擎
 │   ├── embedding.py         # ZhipuAI Embedding 单例工厂（embedding-3, 2048 维）
-│   ├── chunker.py           # 递归字符分块器（默认 800 字符, 200 重叠）
-│   ├── milvus.py            # Milvus 客户端单例 + Collection 管理（dense + BM25 sparse）
-│   ├── search.py            # 混合检索（dense IP + BM25 → RRF 融合排序）
-│   └── service.py           # 知识库业务服务（save_entry, delete_entry, list_entries, search）
+│   ├── parser.py            # 统一文档解析器（Docling + GLM-4V-Flash，单次遍历输出 DocumentElement[]）
+│   ├── chunker.py           # 结构化分块器（基于 DocumentElement[]，不依赖 Docling）
+│   ├── milvus.py            # Milvus 客户端单例 + v1/v2 Collection 管理
+│   ├── search.py            # v1/v2 混合检索（dense IP + BM25 → RRF，v2 携带页码/章节元数据）
+│   └── service.py           # 知识库业务服务（v1: save_entry; v2: save_entry_v2/delete_entry_v2/search_knowledge_v2）
+├── tools/
+│   ├── research.py          # 桥接 chat → research agent
+│   ├── web_search.py        # Tavily 搜索
+│   ├── web_fetch.py         # Tavily URL 内容提取
+│   ├── knowledge_search.py  # 知识库检索工具 v2（带溯源信息）
+│   ├── read_file.py         # 文件读取工具（@tool）
+│   ├── read_pages.py        # 按文档读原文工具（@tool，读取 full.md 缓存）
+│   ├── extract_tables.py    # 表格抽取工具（@tool，读取表格缓存）
+│   └── save_to_knowledge.py # 存入知识库工具（@tool）
 ├── tools/
 │   ├── research.py          # 桥接 chat → research agent
 │   ├── web_search.py        # Tavily 搜索
@@ -58,9 +68,9 @@ src/
 │   ├── __init__.py          # node_hook 装饰器
 │   ├── agent.py             # 状态合并/恢复 + contextvars 用户 ID 注入
 │   ├── pagination.py        # 通用分页工具（PaginatedResult[T]）
-│   └── reader.py            # 文件读取器（支持 txt/md/html/pdf/docx）
+│   └── reader.py            # 文件读取器（支持 txt/md/html/docx；PDF 已迁移到 parser.py）
 ├── agent/                   # 见 Agent 系统记忆文件
-├── config.py                # AgentState 类型定义
+├── config.py                # 类型定义（AgentState + DocumentElement + ChunkConfig + StructuredChunk）
 └── llm.py                   # LLM 工厂
 ```
 
@@ -146,23 +156,45 @@ class ResultOptions(BaseModel):
 
 ## 知识库系统
 
-### 核心流程
+### 核心流程（v2）
 
-1. **存入**：文本/文件 → `chunker` 分块 → `embedding` 向量化 → Milvus 存储 + PG 元数据
-2. **检索**：query 向量化 → dense(IP) + BM25(sparse) 双路召回 → RRF 融合排序
-3. **删除**：Milvus chunks 删除 + PG 记录删除
+1. **存入**：文件/文本 → `parser.py`（Docling 解析 + GLM-4V-Flash 图片描述，单次遍历输出 `DocumentElement[]`）→ `chunker.py`（基于 DocumentElement 语义分块）→ `embedding` 向量化 → Milvus v2 存储 + PG 元数据
+2. **检索**：query 向量化 → dense(IP) + BM25(sparse) 双路召回 → RRF 融合排序 → 返回带页码/章节/类型的 StructuredSearchHit
+3. **删除**：Milvus v2 chunks 删除 + 缓存文件清理 + PG 记录删除
 
-### Milvus Schema
+### 解析层
 
-每用户一个 Collection（`knowledge_{user_id}`）：
-- `pk`：VARCHAR, 自增主键
-- `entry_id`：VARCHAR, 知识条目 ID
-- `chunk_index`：INT32, 分块序号
-- `text`：VARCHAR(65535), 分块文本（启用 analyzer）
-- `dense_vector`：FLOAT_VECTOR(2048), embedding-3 向量
-- `sparse_vector`：SPARSE_FLOAT_VECTOR, BM25 自动生成
+- `parser.py`：统一文档解析器，Docling 处理 PDF/DOCX/MD/HTML
+  - `parse_document(file_path, entry_id)` → `ParsedDocument`（含 `elements: list[DocumentElement]`）
+  - `_enrich_images()`：并发 GLM-4V-Flash 处理图片（asyncio.Semaphore(5)）
+  - `_walk_and_cache()`：单次遍历 DoclingDocument，同时产出 DocumentElement[] + 缓存文件
+  - `_extract_table_image()`：裁剪图片型表格（BOTTOMLEFT 坐标翻转）
+  - 缓存：`uploads/parsed/{entry_id}/full.md` + `tables/T-001.md` + `tables/tables_meta.json` + `image_descriptions.json`
 
-索引：dense 用 AUTOINDEX(IP)，sparse 用 SPARSE_INVERTED_INDEX(BM25)
+### 分块层
+
+- `chunker.py`：`chunk_structured(elements: list[DocumentElement])` → `list[StructuredChunk]`
+  - 不依赖 Docling API，纯基于中间表示
+  - 标题作为分块边界（挂入 heading_path），表格/图片/代码独立成块，段落合并直到超过 max_chunk_size
+
+### DocumentElement 数据类
+
+`src/config.py`：
+- `element_type`: heading / paragraph / table / image / code
+- `text`: 文本内容
+- `page_number`: 页码
+- `heading_level`: 标题层级（仅 heading）
+- `table_id`: 表格 ID（仅 table，如 T-001）
+
+### Milvus Schema（v2）
+
+每用户一个 v2 Collection（`knowledge_v2_{user_id}`）：
+- v1 字段：`pk`, `entry_id`, `chunk_index`, `text`, `dense_vector`, `sparse_vector`
+- v2 新增字段：`page_start`(INT64), `page_end`(INT64), `heading_path`(VARCHAR 512), `content_type`(VARCHAR 32), `table_id`(VARCHAR 64)
+
+### 溯源引用格式
+
+Agent 回答时引用知识库内容：（来源：《文档标题》第X页 "章节名"）
 
 ### 通用工具
 
