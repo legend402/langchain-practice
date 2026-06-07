@@ -11,6 +11,7 @@ import io
 import json
 import logging
 import os
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -507,11 +508,7 @@ async def parse_document(
     if progress_callback:
         await progress_callback("parsing", "Docling 解析中...")
 
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(
-        None,
-        lambda: converter.convert(path),
-    )
+    result = converter.convert(path)
     docling_doc = result.document
 
     if progress_callback:
