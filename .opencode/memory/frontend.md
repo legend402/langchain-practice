@@ -7,6 +7,8 @@
 - Tailwind CSS v4（通过 `@tailwindcss/vite` 插件）
 - @headlessui/react ^2.2.10（无障碍 UI 组件）
 - lucide-react（图标库）
+- mermaid（客户端 Mermaid 图表渲染，替代 rehype-mermaid）
+- overlayscrollbars + overlayscrollbars-react（自定义滚动条）
 - 无额外状态管理库，纯 React hooks + Context
 - 自建 HTTP 客户端（拦截器管道模式）
 
@@ -16,7 +18,7 @@
 frontend/src/
 ├── main.tsx              # 入口：StrictMode + AuthProvider + App
 ├── App.tsx               # RouterProvider 渲染
-├── index.css             # Tailwind + 自定义样式（玻璃态、侧栏、动画）
+├── index.css             # Tailwind + 自定义样式（玻璃态、侧栏、动画、Mermaid 图表）
 ├── routes/               # 路由配置
 │   ├── index.tsx         # createBrowserRouter 路由表
 │   ├── ProtectedRoute.tsx  # 认证守卫
@@ -37,8 +39,8 @@ frontend/src/
 ├── components/           # 可复用 UI 组件
 │   ├── SessionSidebar.tsx   # 侧栏（会话列表 + 知识库导航 + 用户信息）
 │   ├── SearchForm.tsx       # 搜索输入框（支持文件附件上传）
-│   ├── MessageList.tsx      # 消息列表
-│   ├── MarkdownRenderer.tsx # Markdown 渲染
+│   ├── MessageList.tsx      # 消息列表（setTimeout 滚动到底部）
+│   ├── MarkdownRenderer.tsx # Markdown 渲染（含 MermaidBlock 工具栏）
 │   ├── ResultCard.tsx       # 最终结果卡片（含"存入知识库"按钮）
 │   ├── StateCard.tsx        # 节点状态卡片
 │   ├── Modal.tsx            # 通用模态框（Headless UI Dialog + Transition）
@@ -48,8 +50,9 @@ frontend/src/
 │   └── WorkflowStepper.tsx
 ├── hooks/
 │   ├── useAuth.tsx       # 认证上下文
-│   ├── useAgentChat.ts   # 聊天状态管理（submit 支持 fileIds）
-│   └── usePagination.ts  # 通用分页状态管理 Hook
+│   ├── useAgentChat.ts   # 聊天状态管理（chunk 队列 + RAF 批量 flush）
+│   ├── usePagination.ts  # 通用分页状态管理 Hook
+│   └── useCopy.ts        # 剪贴板复制（兼容 HTTP 非安全环境）
 ├── api/
 │   ├── client/           # HTTP 客户端基础设施
 │   │   ├── index.ts         # 单例创建 + 拦截器注册
@@ -103,7 +106,7 @@ main.tsx (AuthProvider)
 
 状态：
 - `messages: ChatMessage[]` — 对话消息
-- `currentState: AgentState | null` — 累积的 Agent 状态
+- `currentState: AgentState | null` — 累积的 Agent 状态（每个 node_update 都会更新）
 - `loading: boolean` — 是否有请求进行中
 - `sessions: ChatSession[]` — 侧栏会话列表
 - `activeThreadId: string | null` — 当前会话 ID
@@ -115,9 +118,19 @@ main.tsx (AuthProvider)
 **submit 签名**：`async (query: string, fileIds?: string[]) => void` — 支持传递附件 ID
 
 SSE 事件处理：
-1. `stream_chunk` → 追加到最后一条消息（实时流式）
-2. `node_update`（research）→ 累积状态 + 添加步骤摘要消息
+1. `stream_chunk` → 推入 chunk 队列，`requestAnimationFrame` 批量 flush（每帧合并为一次 setState）
+2. `node_update`（research）→ 累积状态 + 更新 currentState + 添加步骤摘要消息
 3. `stopped` / `error` → 结束 loading
+
+### useCopy
+
+共享复制 Hook，兼容 HTTP 非安全环境。
+
+```typescript
+function useCopy(): [copied: boolean, handleCopy: (text: string) => void]
+```
+
+优先使用 `navigator.clipboard.writeText`，不可用时 fallback 到 `document.execCommand("copy")`。
 
 ### usePagination
 
@@ -168,6 +181,25 @@ function usePagination<T>(options: {
 ```
 
 渲染逻辑：Human → 右对齐气泡；AI finalize → ResultCard；AI 有 nodeName → StepCard；AI 无 nodeName → MarkdownRenderer。
+
+### MarkdownRenderer
+
+```typescript
+{ children: string, className?: string }
+```
+
+基于 `react-markdown` + `remark-gfm`。代码块使用 `react-syntax-highlighter`（oneDark 主题）+ 复制按钮。
+
+**MermaidBlock**（`language-mermaid` 代码块）：
+- 客户端 `mermaid.render()` 渲染（替代 rehype-mermaid，兼容 SSE 流式）
+- 300ms 防抖，渲染失败静默保留上次成功结果
+- 悬浮工具栏（顶部透明 overlay，`position: absolute`）：
+  - 左侧：「图表」「代码」Tab 切换（卡片按钮样式）
+  - 右侧：复制、缩放（- / 百分比 / +）、下载 SVG、全屏
+- 缩放：`transform: scale()` + spacer 撑开滚动区域，`transformOrigin: center center`
+- 滚动：`OverlayScrollbarsComponent`（与 SessionSidebar 一致）
+- 全屏：`requestFullscreen` API，全屏时图表区域撑满视口
+- 使用 `useCopy` hook（兼容 HTTP 非安全环境）
 
 ### Modal
 
