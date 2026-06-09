@@ -1,5 +1,6 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback, memo } from "react";
 import type { AgentState, ChatMessage } from "../types/agent";
+import { NODE_LABELS, NODE_LOADING_TEXT } from "../types/agent";
 import MarkdownRenderer from "./MarkdownRenderer";
 import ResultCard from "./ResultCard";
 import StateCard from "./StateCard";
@@ -23,18 +24,6 @@ interface MessageListProps {
   activeNode: string;
 }
 
-const NODE_LOADING_TEXT: Record<string, string> = {
-  chat: "正在思考",
-  supervisor: "正在规划研究路径",
-  search: "正在获取相关资料",
-  read: "正在阅读并提取内容",
-  analyze: "正在分析知识结构",
-  tag: "正在提取标签和关键词",
-  knowledge: "正在生成知识总结",
-  review: "正在审核内容质量",
-  finalize: "正在生成最终回答",
-};
-
 const NODE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   chat: Bot,
   search: Search,
@@ -46,19 +35,20 @@ const NODE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   supervisor: ListChecks,
 };
 
-function StepCard({
+const StepCard = memo(function StepCard({
   msg,
   expanded,
   onToggle,
+  fallbackState,
 }: {
   msg: ChatMessage;
   expanded: boolean;
   onToggle: () => void;
+  fallbackState?: AgentState | null;
 }) {
   const Icon = msg.nodeName ? NODE_ICON[msg.nodeName] ?? Bot : Bot;
-  const nodeLabel = msg.nodeName
-    ? { supervisor: "规划", search: "搜索", read: "阅读", analyze: "分析", tag: "标签", knowledge: "总结", review: "审核", chat: "对话" }[msg.nodeName] ?? msg.nodeName
-    : "";
+  const nodeLabel = msg.nodeName ? NODE_LABELS[msg.nodeName] ?? msg.nodeName : "";
+  const displayState = msg.state ?? fallbackState;
 
   return (
     <div className="glass-card overflow-hidden">
@@ -85,38 +75,67 @@ function StepCard({
       >
         <div className="overflow-hidden">
           <div className="px-4 pb-3 border-t border-gray-100/60 pt-2">
-            {msg.state && msg.nodeName && (
-              <StateCard state={msg.state} nodeName={msg.nodeName} />
+            {displayState && msg.nodeName && (
+              <StateCard state={displayState} nodeName={msg.nodeName} />
             )}
           </div>
         </div>
       </div>
     </div>
   );
+});
+
+function isNearBottom(el: HTMLElement, threshold = 80): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
 }
 
-export default function MessageList({ messages, loading, activeNode }: MessageListProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+export default function MessageList({ messages, loading, currentState, activeNode }: MessageListProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const prevMsgCountRef = useRef(messages.length);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+  const forceScrollToBottom = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }, []);
 
   useEffect(() => {
     if (messages.length === 0) return;
-    const last = messages[messages.length - 1];
-    if (last.role === "ai" && last.nodeName && last.nodeName !== "finalize" && last.state) {
-      setExpandedId(last.id);
+    forceScrollToBottom();
+  }, [messages.length, forceScrollToBottom]);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el || messages.length === 0) return;
+    if (isNearBottom(el)) {
+      forceScrollToBottom();
     }
-  }, [messages]);
+  }, [messages, forceScrollToBottom]);
+
+  if (messages.length !== prevMsgCountRef.current) {
+    prevMsgCountRef.current = messages.length;
+    if (messages.length > 0) {
+      const last = messages[messages.length - 1];
+      if (last.role === "ai" && last.nodeName && last.nodeName !== "finalize") {
+        setExpandedId(last.id);
+      }
+    }
+  }
+
+  const isStreaming = loading && !!activeNode;
 
   return (
-    <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 py-4 scrollbar-hide">
-      {messages.map((msg) => (
+    <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 py-4 scrollbar-hide">
+      {messages.map((msg, idx) => (
         <div
           key={msg.id}
           className={`flex gap-3 ${msg.role === "human" ? "justify-end" : ""}`}
+          style={{
+            containIntrinsicSize: "0 80px",
+          }}
         >
           {msg.role === "ai" && (
             <div className="flex-shrink-0 w-7 h-7 rounded-full bg-accent flex items-center justify-center mt-0.5">
@@ -135,15 +154,18 @@ export default function MessageList({ messages, loading, activeNode }: MessageLi
               </p>
             ) : msg.nodeName === "finalize" && msg.state ? (
               <ResultCard state={msg.state} />
-            ) : msg.nodeName && msg.nodeName !== "finalize" && msg.state ? (
+            ) : msg.stepSummary ? (
               <StepCard
                 msg={msg}
                 expanded={expandedId === msg.id}
                 onToggle={() => setExpandedId(expandedId === msg.id ? null : msg.id)}
+                fallbackState={currentState}
               />
             ) : (
               <div className="glass-card px-4 py-3">
-                <MarkdownRenderer>{msg.content}</MarkdownRenderer>
+                <MarkdownRenderer streaming={isStreaming && idx === messages.length - 1}>
+                  {msg.content}
+                </MarkdownRenderer>
                 {msg.nodeName && (
                   <span className="text-[11px] text-ink-400 mt-2 block">
                     节点: {msg.nodeName}
@@ -165,21 +187,12 @@ export default function MessageList({ messages, loading, activeNode }: MessageLi
             <Bot className="w-4 h-4 text-white" />
           </div>
           <div className="glass-card px-4 py-3">
-            <span className="text-xs">
-              {[...(activeNode ? NODE_LOADING_TEXT[activeNode] ?? "正在处理" : "正在处理")].map((char, i) => (
-                <span
-                  key={`${activeNode}-${i}`}
-                  className="wave-char"
-                  style={{ animationDelay: `${i * 0.1}s, ${i * 0.12}s` }}
-                >
-                  {char === " " ? "\u00A0" : char}
-                </span>
-              ))}
+            <span className="text-xs text-ink-400 animate-pulse">
+              {activeNode ? NODE_LOADING_TEXT[activeNode] ?? "正在处理" : "正在处理"}
             </span>
           </div>
         </div>
       )}
-      <div ref={bottomRef} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAgentChatContext } from "../../contexts/AgentChatContext";
+import { useChatContext } from "../../contexts/AgentChatContext";
 import { useSidebar } from "../../contexts/SidebarContext";
 import type { FileUpload } from "../../types/knowledge";
 import logoSvg from "../../assets/logo.svg";
@@ -7,36 +7,21 @@ import logoSvg from "../../assets/logo.svg";
 import SearchForm from "../../components/SearchForm";
 import MessageList from "../../components/MessageList";
 
-/**
- * 聊天主页面：消息列表和搜索表单（侧边栏由 AppLayout 管理）
- */
 export default function ChatPage() {
-  const chat = useAgentChatContext();
+  const chat = useChatContext();
   const sidebar = useSidebar();
   const [attachments, setAttachments] = useState<FileUpload[]>([]);
 
   const isEmpty = chat.messages.length === 0 && !chat.loading;
 
-  /**
-   * 添加文件附件
-   * @param file - 文件上传记录
-   */
   function handleAddAttachment(file: FileUpload) {
     setAttachments((prev) => [...prev, file]);
   }
 
-  /**
-   * 移除文件附件
-   * @param fileId - 文件 ID
-   */
   function handleRemoveAttachment(fileId: string) {
     setAttachments((prev) => prev.filter((f) => f.id !== fileId));
   }
 
-  /**
-   * 提交消息并附带文件 ID
-   * @param query - 用户输入的查询内容
-   */
   async function handleSubmit(query: string) {
     const fileIds = attachments.length > 0 ? attachments.map((f) => f.id) : undefined;
     setAttachments([]);

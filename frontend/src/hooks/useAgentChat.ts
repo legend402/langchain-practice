@@ -7,47 +7,11 @@ import type {
   NodeKey,
 } from "../types/agent";
 import { agentApi } from "../api/agentApi";
-import { getNodeKey, createInitialState } from "../types/agent";
+import { getNodeKey, createInitialState, getNodeSummary, NODE_LABELS } from "../types/agent";
 
+let _seq = 0;
 function uuid(): string {
-  return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
-}
-
-const NODE_LABELS: Record<string, string> = {
-  supervisor: "规划",
-  search: "搜索",
-  read: "阅读",
-  analyze: "分析",
-  tag: "标签",
-  knowledge: "总结",
-  review: "审核",
-  finalize: "完成",
-  chat: "对话",
-};
-
-function getNodeSummary(nodeKey: NodeKey, data: NonNullable<SSEEventData[NodeKey]>): string {
-  switch (nodeKey) {
-    case "search":
-      return `搜索完成，找到 ${(data as { search_results: unknown[] }).search_results?.length ?? 0} 篇相关资料`;
-    case "read":
-      return `阅读完成，提取了 ${(data as { read_notes: unknown[] }).read_notes?.length ?? 0} 条笔记`;
-    case "analyze":
-      return "分析完成，已构建知识结构";
-    case "tag":
-      return "标签生成完成";
-    case "knowledge":
-      return "知识总结已生成";
-    case "review": {
-      const r = (data as { review_result: { status: string } }).review_result;
-      return r?.status === "pass"
-        ? "审核通过"
-        : "审核建议修改，将重新规划";
-    }
-    case "finalize":
-      return "最终总结已生成";
-    default:
-      return "处理完成";
-  }
+  return `${Date.now().toString(36)}_${(++_seq).toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
 function accumulateState(
@@ -111,6 +75,31 @@ function accumulateState(
   return next;
 }
 
+/**
+ * 将 SSE 事件归一化为统一的 node_update 结构
+ * research 路径: event.state 展开后提取 nodeKey 对应的数据
+ * chat 路径: 直接从 event 中查找 nodeKey
+ */
+function normalizeNodeUpdate(event: SSEEventData): {
+  nodeKey: string;
+  nodeData: unknown;
+  flatEvent: SSEEventData;
+} | null {
+  if (event.source === "research" && event.type === "node_update") {
+    const nodeKey = event.node as string;
+    const nodeState = event.state as Record<string, unknown>;
+    if (!nodeKey || !nodeState) return null;
+    const flatEvent: Record<string, unknown> = { ...nodeState, session_id: event.session_id };
+    const nodeData = flatEvent[nodeKey];
+    if (!nodeData) return null;
+    return { nodeKey, nodeData, flatEvent: flatEvent as SSEEventData };
+  }
+
+  const nodeKey = getNodeKey(event);
+  if (!nodeKey) return null;
+  return { nodeKey, nodeData: event[nodeKey]!, flatEvent: event };
+}
+
 export { NODE_LABELS };
 
 export function useAgentChat() {
@@ -121,6 +110,44 @@ export function useAgentChat() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [activeNode, setActiveNode] = useState<string>("");
   const stateRef = useRef<AgentState>(createInitialState());
+
+  const chunkQueue = useRef<{ chunk: string; nodeKey: string }[]>([]);
+  const rafId = useRef<number>(0);
+
+  const flushChunks = useCallback(() => {
+    const queue = chunkQueue.current;
+    if (queue.length === 0) return;
+    chunkQueue.current = [];
+
+    let pendingNode = "";
+    setMessages((prev) => {
+      const msgs = [...prev];
+      let last = msgs[msgs.length - 1];
+      for (const { chunk, nodeKey } of queue) {
+        pendingNode = nodeKey;
+        if (last && last.nodeName === nodeKey) {
+          last = { ...last, content: last.content + chunk };
+          msgs[msgs.length - 1] = last;
+        } else {
+          last = { id: uuid(), role: "ai", content: chunk, timestamp: Date.now(), nodeName: nodeKey };
+          msgs.push(last);
+        }
+      }
+      return msgs;
+    });
+
+    if (pendingNode) setActiveNode(pendingNode);
+  }, []);
+
+  const enqueueChunk = useCallback((chunk: string, nodeKey: string) => {
+    chunkQueue.current.push({ chunk, nodeKey });
+    if (!rafId.current) {
+      rafId.current = requestAnimationFrame(() => {
+        rafId.current = 0;
+        flushChunks();
+      });
+    }
+  }, [flushChunks]);
 
   const addMessage = useCallback((msg: ChatMessage) => {
     setMessages((prev) => [...prev, msg]);
@@ -172,6 +199,46 @@ export function useAgentChat() {
     } catch { }
   }, [activeThreadId, startNewSession]);
 
+  const handleNodeUpdate = useCallback((event: SSEEventData) => {
+    const normalized = normalizeNodeUpdate(event);
+    if (!normalized) return;
+
+    const { nodeKey, nodeData } = normalized;
+    stateRef.current = accumulateState(stateRef.current, normalized.flatEvent, nodeKey as NodeKey);
+
+    if (nodeKey === "supervisor") {
+      const nextNode = (nodeData as { next: string })?.next;
+      if (nextNode) setActiveNode(nextNode);
+      return;
+    }
+
+    setActiveNode(nodeKey);
+
+    if (nodeKey === "finalize") {
+      setCurrentState({ ...stateRef.current });
+      setMessages((prev) => {
+        const lastMsg = prev[prev.length - 1];
+        if (lastMsg && lastMsg.nodeName === "finalize") {
+          return [...prev.slice(0, -1), { ...lastMsg, state: { ...stateRef.current } }];
+        }
+        return prev;
+      });
+      return;
+    }
+
+    setCurrentState({ ...stateRef.current });
+
+    const agentMsg: ChatMessage = {
+      id: uuid(),
+      role: "ai",
+      content: getNodeSummary(nodeKey as NodeKey, nodeData as Record<string, unknown>),
+      nodeName: nodeKey,
+      stepSummary: true,
+      timestamp: Date.now(),
+    };
+    addMessage(agentMsg);
+  }, [addMessage]);
+
   const handleMessage = useCallback((event: SSEEventData) => {
     if ((event as Record<string, unknown>).type === "stopped") {
       setLoading(false);
@@ -196,97 +263,13 @@ export function useAgentChat() {
     }
     if (event.stream_chunk) {
       const { chunk, node_output_key } = event.stream_chunk;
-
       if (node_output_key === "tools") return;
-
-      setActiveNode(node_output_key);
-      setMessages((prev) => {
-        const lastMsg = prev[prev.length - 1];
-        if (lastMsg && lastMsg.nodeName === node_output_key) {
-          const updatedMsg = { ...lastMsg, content: lastMsg.content + chunk };
-          return [...prev.slice(0, -1), updatedMsg];
-        } else {
-          return [...prev, { id: uuid(), role: "ai", content: chunk, timestamp: Date.now(), nodeName: node_output_key }];
-        }
-      });
-      return;
-    }
-    if (event.source === "research" && event.type === "node_update") {
-      const nodeKey = event.node as string;
-      const nodeState = event.state as Record<string, unknown>;
-      if (!nodeKey || !nodeState) return;
-
-      const flatEvent: Record<string, unknown> = { ...nodeState, session_id: event.session_id };
-      const nodeData = flatEvent[nodeKey];
-
-      stateRef.current = accumulateState(stateRef.current, flatEvent as SSEEventData, nodeKey as NodeKey);
-      setCurrentState({ ...stateRef.current });
-
-      if (nodeKey === "supervisor") {
-        const nextNode = (nodeData as { next: string })?.next;
-        if (nextNode) setActiveNode(nextNode);
-        return;
-      }
-      setActiveNode(nodeKey);
-      if (nodeKey === "finalize") {
-        setMessages((prev) => {
-          const lastMsg = prev[prev.length - 1];
-          if (lastMsg && lastMsg.nodeName === "finalize") {
-            return [...prev.slice(0, -1), { ...lastMsg, state: { ...stateRef.current } }];
-          }
-          return prev;
-        });
-        return;
-      }
-
-      const agentMsg: ChatMessage = {
-        id: uuid(),
-        role: "ai",
-        content: getNodeSummary(nodeKey as NodeKey, nodeData as NonNullable<SSEEventData[NodeKey]>),
-        state: { ...stateRef.current },
-        nodeName: nodeKey,
-        timestamp: Date.now(),
-      };
-      addMessage(agentMsg);
+      enqueueChunk(chunk, node_output_key);
       return;
     }
 
-    const nodeKey = getNodeKey(event);
-    if (!nodeKey) return;
-
-    const nodeData = event[nodeKey]!;
-    stateRef.current = accumulateState(stateRef.current, event, nodeKey);
-    setCurrentState({ ...stateRef.current });
-
-    if (nodeKey === "supervisor") {
-      const nextNode = (nodeData as { next: string })?.next;
-      if (nextNode) {
-        setActiveNode(nextNode);
-      }
-      return;
-    }
-    setActiveNode(nodeKey);
-    if (nodeKey === "finalize") {
-      setMessages((prev) => {
-        const lastMsg = prev[prev.length - 1];
-        if (lastMsg && lastMsg.nodeName === "finalize") {
-          return [...prev.slice(0, -1), { ...lastMsg, state: { ...stateRef.current } }];
-        }
-        return prev;
-      });
-      return;
-    }
-
-    const agentMsg: ChatMessage = {
-      id: uuid(),
-      role: "ai",
-      content: getNodeSummary(nodeKey, nodeData),
-      state: { ...stateRef.current },
-      nodeName: nodeKey,
-      timestamp: Date.now(),
-    };
-    addMessage(agentMsg);
-  }, [addMessage, stateRef]);
+    handleNodeUpdate(event);
+  }, [addMessage, enqueueChunk, handleNodeUpdate]);
 
   const submit = useCallback(
     async (query: string, fileIds?: string[]) => {
@@ -315,24 +298,22 @@ export function useAgentChat() {
             }
           },
           onError: (err: Error) => {
-            const errMsg: ChatMessage = {
+            addMessage({
               id: uuid(),
               role: "ai",
               content: `处理出错: ${err.message}`,
               timestamp: Date.now(),
-            };
-            addMessage(errMsg);
+            });
           },
           onClose: () => { },
         });
       } catch (err) {
-        const errMsg: ChatMessage = {
+        addMessage({
           id: uuid(),
           role: "ai",
           content: `请求失败: ${err instanceof Error ? err.message : "未知错误"}`,
           timestamp: Date.now(),
-        };
-        addMessage(errMsg);
+        });
       } finally {
         setLoading(false);
       }
@@ -349,8 +330,6 @@ export function useAgentChat() {
     setActiveNode("");
   }, [activeThreadId]);
 
-  const showResultCard = !!currentState?.final_answer;
-
   return {
     messages,
     currentState,
@@ -358,7 +337,6 @@ export function useAgentChat() {
     activeNode,
     submit,
     stop,
-    showResultCard,
     sessions,
     activeThreadId,
     loadSession,

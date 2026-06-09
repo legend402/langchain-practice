@@ -1,4 +1,4 @@
-const BASE_URL = `${location.protocol}//${location.hostname}:7900`;
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? `${location.protocol}//${location.hostname}:7900`;
 
 export interface ApiResponse<T = unknown> {
   ok: boolean;

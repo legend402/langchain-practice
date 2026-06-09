@@ -9,10 +9,10 @@ import type {
   NodeKey,
   ResponseResult,
 } from "../types/agent";
+import { getNodeSummary } from "../types/agent";
 import { httpClient } from "./client";
 
 export interface AgentApi {
-  abort: AbortController;
   submitSSETask: (
     request: SubmitRequest,
     events: SSEEventHandler,
@@ -50,29 +50,6 @@ function flattenState(
   return { ...(nodeData as Record<string, unknown>), session_id: s.session_id ?? "" } as unknown as AgentState;
 }
 
-function getNodeSummary(nodeName: string, nodeData: Record<string, unknown>): string {
-  switch (nodeName) {
-    case "search":
-      return `搜索完成，找到 ${(nodeData.search_results as unknown[])?.length ?? 0} 篇相关资料`;
-    case "read":
-      return `阅读完成，提取了 ${(nodeData.read_notes as unknown[])?.length ?? 0} 条笔记`;
-    case "analyze":
-      return "分析完成，已构建知识结构";
-    case "tag":
-      return "标签生成完成";
-    case "knowledge":
-      return "知识总结已生成";
-    case "review": {
-      const r = nodeData.review_result as { status: string } | undefined;
-      return r?.status === "pass" ? "审核通过" : r?.status === "need_human" ? "需要人工审核" : "审核建议修改";
-    }
-    case "finalize":
-      return (nodeData.final_answer as string) ?? "最终总结已生成";
-    default:
-      return "处理完成";
-  }
-}
-
 function parseMessages(rows: ChatMessageFromDB[]): ChatMessage[] {
   return rows
     .filter((r) => {
@@ -95,27 +72,35 @@ function parseMessages(rows: ChatMessageFromDB[]): ChatMessage[] {
           : nodeData ? getNodeSummary(effectiveNodeName, nodeData) : "";
       }
 
+      const isStep = !!effectiveNodeName && effectiveNodeName !== "finalize";
+
       return {
         id: String(r.id),
         role,
         content,
         state: flatState,
         nodeName: effectiveNodeName ?? undefined,
+        stepSummary: isStep ? true : undefined,
         timestamp: new Date(r.create_at).getTime(),
       };
     });
 }
 
+let activeAbortController: AbortController | null = null;
+
 const realApi: AgentApi = {
-  abort: new AbortController(),
   async submitSSETask(
     request: SubmitRequest,
     events: SSEEventHandler,
   ): Promise<void> {
-    agentApi.abort.abort();
-    agentApi.abort = new AbortController();
+    if (activeAbortController) {
+      activeAbortController.abort();
+    }
+    activeAbortController = new AbortController();
+    const currentController = activeAbortController;
+
     const response = await httpClient.stream("/chat/start", request, {
-      signal: agentApi.abort.signal,
+      signal: currentController.signal,
     });
     await agentApi.dispatchEvent(events, response);
   },
@@ -128,11 +113,18 @@ const realApi: AgentApi = {
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
     let buffer = "";
+    let closed = false;
+
+    function safeClose() {
+      if (closed) return;
+      closed = true;
+      events.onClose?.();
+    }
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) {
-        events.onClose?.();
+        safeClose();
         break;
       }
 
@@ -145,7 +137,7 @@ const realApi: AgentApi = {
         if (!trimmed.startsWith("data: ")) continue;
         const payload = trimmed.slice(6);
         if (payload === "[DONE]") {
-          events.onClose?.();
+          safeClose();
           return;
         }
         try {
@@ -157,7 +149,10 @@ const realApi: AgentApi = {
     }
   },
   async stopChat(session_id: string) {
-    agentApi.abort.abort();
+    if (activeAbortController) {
+      activeAbortController.abort();
+      activeAbortController = null;
+    }
     const { data } = await httpClient.post<ResponseResult>(`/chat/${session_id}/stop`);
     return data;
   },

@@ -130,6 +130,7 @@ export interface ChatMessage {
   content: string;
   state?: AgentState;
   nodeName?: string;
+  stepSummary?: boolean;
   timestamp: number;
 }
 
@@ -223,4 +224,51 @@ export function createInitialState(): AgentState {
     final_answer: "",
     errors: [],
   };
+}
+
+export const NODE_LABELS: Record<string, string> = {
+  supervisor: "规划",
+  search: "搜索",
+  read: "阅读",
+  analyze: "分析",
+  tag: "标签",
+  knowledge: "总结",
+  review: "审核",
+  finalize: "完成",
+  chat: "对话",
+};
+
+export const NODE_LOADING_TEXT: Record<string, string> = {
+  chat: "正在思考",
+  supervisor: "正在规划研究路径",
+  search: "正在获取相关资料",
+  read: "正在阅读并提取内容",
+  analyze: "正在分析知识结构",
+  tag: "正在提取标签和关键词",
+  knowledge: "正在生成知识总结",
+  review: "正在审核内容质量",
+  finalize: "正在生成最终回答",
+};
+
+export function getNodeSummary(nodeName: string, nodeData: Record<string, unknown>): string {
+  switch (nodeName) {
+    case "search":
+      return `搜索完成，找到 ${(nodeData.search_results as unknown[])?.length ?? 0} 篇相关资料`;
+    case "read":
+      return `阅读完成，提取了 ${(nodeData.read_notes as unknown[])?.length ?? 0} 条笔记`;
+    case "analyze":
+      return "分析完成，已构建知识结构";
+    case "tag":
+      return "标签生成完成";
+    case "knowledge":
+      return "知识总结已生成";
+    case "review": {
+      const r = nodeData.review_result as { status: string } | undefined;
+      return r?.status === "pass" ? "审核通过" : r?.status === "need_human" ? "需要人工审核" : "审核建议修改";
+    }
+    case "finalize":
+      return (nodeData.final_answer as string) ?? "最终总结已生成";
+    default:
+      return "处理完成";
+  }
 }

@@ -1,21 +1,10 @@
 import type { AgentState } from "../types/agent";
+import { NODE_LABELS } from "../types/agent";
 
 interface StateCardProps {
   state: Partial<AgentState>;
   nodeName: string;
 }
-
-const NODE_LABELS: Record<string, string> = {
-  supervisor: "规划",
-  search: "搜索",
-  read: "阅读",
-  analyze: "分析",
-  tag: "标签",
-  knowledge: "总结",
-  review: "审核",
-  human_gate: "人工审核",
-  finalize: "完成",
-};
 
 const CREDIBILITY_LABEL: Record<string, string> = {
   high: "高",
