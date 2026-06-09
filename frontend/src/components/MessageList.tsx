@@ -22,6 +22,7 @@ interface MessageListProps {
   loading: boolean;
   currentState: AgentState | null;
   activeNode: string;
+  activeThreadId?: string | null;
 }
 
 const NODE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -89,10 +90,11 @@ function isNearBottom(el: HTMLElement, threshold = 80): boolean {
   return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
 }
 
-export default function MessageList({ messages, loading, currentState, activeNode }: MessageListProps) {
+export default function MessageList({ messages, loading, currentState, activeNode, activeThreadId }: MessageListProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const prevMsgCountRef = useRef(messages.length);
+  const prevThreadIdRef = useRef(activeThreadId);
 
   const forceScrollToBottom = useCallback(() => {
     const el = scrollContainerRef.current;
@@ -102,10 +104,19 @@ export default function MessageList({ messages, loading, currentState, activeNod
     });
   }, []);
 
+  const forceNextScrollRef = useRef(false);
+
   useEffect(() => {
     if (messages.length === 0) return;
     forceScrollToBottom();
   }, [messages.length, forceScrollToBottom]);
+
+  useEffect(() => {
+    if (prevThreadIdRef.current === activeThreadId) return;
+    prevThreadIdRef.current = activeThreadId;
+    forceNextScrollRef.current = true;
+    forceScrollToBottom();
+  }, [activeThreadId, forceScrollToBottom]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -114,6 +125,19 @@ export default function MessageList({ messages, loading, currentState, activeNod
       forceScrollToBottom();
     }
   }, [messages, forceScrollToBottom]);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      if (forceNextScrollRef.current || isNearBottom(el, 150)) {
+        forceNextScrollRef.current = false;
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+    Array.from(el.children).forEach((child) => observer.observe(child));
+    return () => observer.disconnect();
+  }, [messages.length]);
 
   if (messages.length !== prevMsgCountRef.current) {
     prevMsgCountRef.current = messages.length;

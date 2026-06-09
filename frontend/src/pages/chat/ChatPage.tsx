@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useChatContext } from "../../contexts/AgentChatContext";
+import { useChatContext, useSessionContext } from "../../contexts/AgentChatContext";
 import { useSidebar } from "../../contexts/SidebarContext";
 import type { FileUpload } from "../../types/knowledge";
 import logoSvg from "../../assets/logo.svg";
@@ -9,6 +9,7 @@ import MessageList from "../../components/MessageList";
 
 export default function ChatPage() {
   const chat = useChatContext();
+  const session = useSessionContext();
   const sidebar = useSidebar();
   const [attachments, setAttachments] = useState<FileUpload[]>([]);
 
@@ -72,6 +73,7 @@ export default function ChatPage() {
               loading={chat.loading}
               currentState={chat.currentState}
               activeNode={chat.activeNode}
+              activeThreadId={session.activeThreadId}
             />
             <div className="shrink-0 pb-4 pt-0 space-y-3">
               {searchForm}
