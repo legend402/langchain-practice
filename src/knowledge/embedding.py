@@ -1,18 +1,18 @@
 import os
-from langchain_community.embeddings import ZhipuAIEmbeddings
+from langchain_openai import OpenAIEmbeddings 
 
+_embeddings: OpenAIEmbeddings | None = None
 
-_embeddings: ZhipuAIEmbeddings | None = None
-
-def get_embeddings() -> ZhipuAIEmbeddings:
+def get_embeddings() -> OpenAIEmbeddings:
   """
     获取 ZhipuAIEmbeddings 单例。
     使用 embedding-3 模型，维度 2048。
   """
   global _embeddings
   if _embeddings is None:
-    _embeddings = ZhipuAIEmbeddings(
+    _embeddings = OpenAIEmbeddings(
       model="embedding-3",
+      base_url="https://open.bigmodel.cn/api/paas/v4/",
       api_key=os.getenv("ZHIPU_API_KEY"),
     )
   return _embeddings

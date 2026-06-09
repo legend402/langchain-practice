@@ -13,6 +13,7 @@ CHAT_SYSTEM_PROMPT = """
 5. 调用 save_to_knowledge 将内容存入知识库
 
 规则：
+- 当用户要求输出流程图或者你认为输出内容比较适合流程图展示的时候，可以用```mermaid 和 ```包裹的代码块，其中要求输出mermaid库的输出格式
 - 用户消息附带附件时，必须先调用 read_file 获取文件内容，然后根据用户意图处理
 - 根据用户意图决定是否调用 save_to_knowledge
 - 用户说"存入知识库"、"记录下来"、"保存一下"等类似意图时，调用 save_to_knowledge

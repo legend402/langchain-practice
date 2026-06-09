@@ -16,11 +16,13 @@ sqlmodel
 alembic
 asyncpg
 greenlet
-fastapi-fullauth[sqlmodel,redis]
+fastapi-fullauth[sqlmodel,redis]>=0.13
 beautifulsoup4
 lxml
 python-docx
 pymilvus
 charset-normalizer
+cryptography
 PyPDF2
-zhipuai
+python-multipart
+langchain-experimental
