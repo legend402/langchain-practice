@@ -67,8 +67,20 @@ function MermaidBlock({ code }: { code: string }) {
     if (!svg || !svgWrapRef.current) return;
     const svgEl = svgWrapRef.current.querySelector("svg");
     if (!svgEl) return;
-    const w = svgEl.clientWidth || svgEl.getBoundingClientRect().width || 400;
-    const h = svgEl.clientHeight || svgEl.getBoundingClientRect().height || 200;
+    let w = svgEl.clientWidth || svgEl.getBoundingClientRect().width || 400;
+    let h = svgEl.clientHeight || svgEl.getBoundingClientRect().height || 200;
+    const vb = svgEl.getAttribute("viewBox");
+    if (vb) {
+      const parts = vb.split(/[\s,]+/).map(Number);
+      if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+        if (!svgEl.getAttribute("width") || !svgEl.getAttribute("height")) {
+          w = parts[2];
+          h = parts[3];
+        }
+      }
+    }
+    svgEl.style.width = w + "px";
+    svgEl.style.height = h + "px";
     setNaturalSize({ w, h });
   }, [svg]);
 
