@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useChatContext, useSessionContext } from "../../contexts/AgentChatContext";
 import { useSidebar } from "../../contexts/SidebarContext";
 import type { FileUpload } from "../../types/knowledge";
+import type { FeedbackRequest } from "../../types/agent";
 import logoSvg from "../../assets/logo.svg";
 
 import SearchForm from "../../components/SearchForm";
 import MessageList from "../../components/MessageList";
+import HumanFeedbackPanel from "../../components/HumanFeedbackPanel";
 
 export default function ChatPage() {
   const chat = useChatContext();
@@ -37,6 +39,14 @@ export default function ChatPage() {
       attachments={attachments}
       onAddAttachment={handleAddAttachment}
       onRemoveAttachment={handleRemoveAttachment}
+    />
+  );
+
+  const feedbackPanel = chat.humanInterrupt && (
+    <HumanFeedbackPanel
+      interrupt={chat.humanInterrupt}
+      onSubmit={(feedback: FeedbackRequest) => chat.submitFeedback(feedback)}
+      loading={chat.loading}
     />
   );
 
@@ -76,7 +86,7 @@ export default function ChatPage() {
               activeThreadId={session.activeThreadId}
             />
             <div className="shrink-0 pb-4 pt-0 space-y-3">
-              {searchForm}
+              {chat.humanInterrupt ? feedbackPanel : searchForm}
             </div>
           </>
         )}

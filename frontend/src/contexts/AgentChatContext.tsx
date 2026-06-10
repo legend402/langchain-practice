@@ -24,6 +24,8 @@ interface ChatSlice {
   activeNode: AgentChatValue["activeNode"];
   submit: AgentChatValue["submit"];
   stop: AgentChatValue["stop"];
+  humanInterrupt: AgentChatValue["humanInterrupt"];
+  submitFeedback: AgentChatValue["submitFeedback"];
 }
 
 const SessionContext = createContext<SessionSlice | null>(null);
@@ -50,7 +52,9 @@ export function AgentChatProvider({ children }: { children: ReactNode }) {
     activeNode: chat.activeNode,
     submit: chat.submit,
     stop: chat.stop,
-  }), [chat.messages, chat.currentState, chat.loading, chat.activeNode, chat.submit, chat.stop]);
+    humanInterrupt: chat.humanInterrupt,
+    submitFeedback: chat.submitFeedback,
+  }), [chat.messages, chat.currentState, chat.loading, chat.activeNode, chat.submit, chat.stop, chat.humanInterrupt, chat.submitFeedback]);
 
   return (
     <SessionContext.Provider value={sessionValue}>

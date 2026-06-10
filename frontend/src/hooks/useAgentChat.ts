@@ -5,6 +5,8 @@ import type {
   ChatSession,
   SSEEventData,
   NodeKey,
+  HumanInterrupt,
+  FeedbackRequest,
 } from "../types/agent";
 import { agentApi } from "../api/agentApi";
 import { getNodeKey, createInitialState, getNodeSummary, NODE_LABELS } from "../types/agent";
@@ -109,6 +111,7 @@ export function useAgentChat() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [activeNode, setActiveNode] = useState<string>("");
+  const [humanInterrupt, setHumanInterrupt] = useState<HumanInterrupt | null>(null);
   const stateRef = useRef<AgentState>(createInitialState());
 
   const chunkQueue = useRef<{ chunk: string; nodeKey: string }[]>([]);
@@ -186,6 +189,7 @@ export function useAgentChat() {
     setCurrentState(null);
     setActiveThreadId(null);
     setActiveNode("");
+    setHumanInterrupt(null);
     stateRef.current = createInitialState();
   }, []);
 
@@ -261,6 +265,11 @@ export function useAgentChat() {
       });
       return;
     }
+    if (event.human) {
+      setLoading(false);
+      setHumanInterrupt(event.human);
+      return;
+    }
     if (event.stream_chunk) {
       const { chunk, node_output_key } = event.stream_chunk;
       if (node_output_key === "tools") return;
@@ -330,6 +339,49 @@ export function useAgentChat() {
     setActiveNode("");
   }, [activeThreadId]);
 
+  const submitFeedback = useCallback(
+    async (feedback: FeedbackRequest) => {
+      if (!activeThreadId) return;
+      setHumanInterrupt(null);
+      setLoading(true);
+      setActiveNode("");
+
+      try {
+        await agentApi.submitFeedback(activeThreadId, feedback, {
+          onMessage: (event: SSEEventData) => {
+            handleMessage(event);
+
+            if (event.session_id && !activeThreadId) {
+              setActiveThreadId(event.session_id);
+              refreshSessions();
+            }
+          },
+          onError: (err: Error) => {
+            addMessage({
+              id: uuid(),
+              role: "ai",
+              content: `处理出错: ${err.message}`,
+              timestamp: Date.now(),
+            });
+          },
+          onClose: () => { },
+        });
+      } catch (err) {
+        addMessage({
+          id: uuid(),
+          role: "ai",
+          content: `请求失败: ${err instanceof Error ? err.message : "未知错误"}`,
+          timestamp: Date.now(),
+        });
+      } finally {
+        if (!humanInterrupt) {
+          setLoading(false);
+        }
+      }
+    },
+    [activeThreadId, handleMessage, refreshSessions, addMessage, humanInterrupt],
+  );
+
   return {
     messages,
     currentState,
@@ -342,5 +394,7 @@ export function useAgentChat() {
     loadSession,
     startNewSession,
     deleteSession,
+    humanInterrupt,
+    submitFeedback,
   };
 }

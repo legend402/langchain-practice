@@ -152,6 +152,34 @@ export interface ResponseResult<T = void> {
   timestamp: number;
 }
 
+export interface HumanOption {
+  label: string;
+  description: string;
+}
+
+export interface HumanItem {
+  title: string;
+  description: string;
+  options?: HumanOption[];
+}
+
+export interface HumanInterrupt {
+  type: "confirm" | "choose" | "question_list";
+  items: HumanItem[];
+}
+
+export interface FeedbackSelection {
+  item_index: number;
+  confirmed?: boolean;
+  selected_option_index?: number;
+  comment?: string;
+}
+
+export interface FeedbackRequest {
+  type: "confirm" | "choose" | "question_list";
+  items: FeedbackSelection[];
+}
+
 export type SSEEventData = {
   stream_chunk: { chunk: string; node_output_key: NodeKey | "chat" | "tools" };
   source?: "research" | "chat";
@@ -159,6 +187,7 @@ export type SSEEventData = {
   node?: string;
   state?: Record<string, unknown>;
   result?: string;
+  human?: HumanInterrupt;
   supervisor?: { supervisor_reason: string; next: string };
   search?: {
     search_results: SearchResult[];

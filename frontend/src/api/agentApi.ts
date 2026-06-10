@@ -8,6 +8,7 @@ import type {
   AgentState,
   NodeKey,
   ResponseResult,
+  FeedbackRequest,
 } from "../types/agent";
 import { getNodeSummary } from "../types/agent";
 import { httpClient } from "./client";
@@ -15,6 +16,11 @@ import { httpClient } from "./client";
 export interface AgentApi {
   submitSSETask: (
     request: SubmitRequest,
+    events: SSEEventHandler,
+  ) => Promise<void>;
+  submitFeedback: (
+    sessionId: string,
+    feedback: FeedbackRequest,
     events: SSEEventHandler,
   ) => Promise<void>;
   stopChat: (sessionId: string) => Promise<ResponseResult>;
@@ -55,7 +61,7 @@ function parseMessages(rows: ChatMessageFromDB[]): ChatMessage[] {
     .filter((r) => {
       if (r.role === "human" || r.role === "user") return true;
       const nodeName = r.node_name || extractNodeName(r.state);
-      return nodeName !== "supervisor" && nodeName !== "tools";
+      return nodeName !== "supervisor" && nodeName !== "tools" && nodeName !== "human";
     })
     .map((r) => {
       const role: "human" | "ai" = (r.role === "user" || r.role === "human") ? "human" : "ai";
@@ -100,6 +106,22 @@ const realApi: AgentApi = {
     const currentController = activeAbortController;
 
     const response = await httpClient.stream("/chat/start", request, {
+      signal: currentController.signal,
+    });
+    await agentApi.dispatchEvent(events, response);
+  },
+  async submitFeedback(
+    sessionId: string,
+    feedback: FeedbackRequest,
+    events: SSEEventHandler,
+  ): Promise<void> {
+    if (activeAbortController) {
+      activeAbortController.abort();
+    }
+    activeAbortController = new AbortController();
+    const currentController = activeAbortController;
+
+    const response = await httpClient.stream(`/chat/${sessionId}/feedback`, feedback, {
       signal: currentController.signal,
     });
     await agentApi.dispatchEvent(events, response);
