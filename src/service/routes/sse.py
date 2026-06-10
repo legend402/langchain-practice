@@ -27,10 +27,18 @@ async def event_generator(
         async for mode, state in agent.astream(
             initial_state, config, stream_mode=["updates", "custom", "messages"]
         ):
+            if "__interrupt__" in state:
+                interrupt_state = {
+                    "human": state["__interrupt__"][0].value,
+                    "session_id": session_id,
+                }
+                yield f"data: {json.dumps(interrupt_state)}\n\n"
+                continue
             if mode == "messages":
                 token, metadata = state
+                node = metadata.get("langgraph_node", "chat")
+                if node != "chat": continue
                 if isinstance(token, AIMessageChunk) and token.content:
-                    node = metadata.get("langgraph_node", "chat")
                     event = {
                         "stream_chunk": {
                             "chunk": token.content,
@@ -58,13 +66,6 @@ async def event_generator(
                     yield f"data: {json.dumps(state)}\n\n"
                 continue
 
-            if "__interrupt__" in state:
-                interrupt_state = {
-                    "human": state["__interrupt__"][0].value,
-                    "session_id": session_id,
-                }
-                yield f"data: {json.dumps(interrupt_state)}\n\n"
-                continue
 
             if "updates" == mode:
                 if not state:

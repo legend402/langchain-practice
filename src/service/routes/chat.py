@@ -28,9 +28,8 @@ class ChatStart(BaseModel):
 
 
 class ChatFeedback(BaseModel):
-    decision: str
-    comment: str
-    additional_material: str | None = None
+    type: str
+    items: list[dict]
 
 
 @router.get("/sessions")
@@ -78,9 +77,10 @@ async def chat_start(body: ChatStart, user: CurrentUser, session: AsyncSession =
             session=session, thread_id=thread_id, title=body.query[:50], user_id=user.id
         )
     # 如果存在记录，就获取完整的记录，然后重新把记录传回get_initial_chat_state，恢复上下文
-    elif session.get(ChatSession, thread_id):
-        messages = await get_messages(session, thread_id)
-        state["messages"] = recover_chat_state(messages)["messages"]
+    # elif session.get(ChatSession, thread_id):
+    #     messages = await get_messages(session, thread_id)
+    #     print(messages)
+    #     state["messages"] = recover_chat_state(messages)["messages"]
 
     await create_message(
         session=session, thread_id=thread_id, role="human", content=body.query
