@@ -11,6 +11,7 @@ class ChatState(TypedDict, total=False):
     research_result: Optional[str]
     research_active: bool
     file_ids: Optional[list[str]]
+    next_state: str
 
 
 def get_initial_chat_state(state: ChatState):
