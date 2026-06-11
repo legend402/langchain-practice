@@ -18,7 +18,7 @@
       "args": [
         "src.service:app",
         "--reload",
-        "--port=4030",
+        "--port=7900",
         "--host=0.0.0.0"
       ],
       "jinja": true

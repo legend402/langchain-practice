@@ -5,6 +5,7 @@
 ## 项目概述
 
 知识研究助手（Knowledge Research Agent），FastAPI 后端 + React 前端 SPA。
+
 - 后端：LangGraph 多步研究 Agent + FastAPI SSE 流式输出 + JWT 认证
 - 前端：React 19 + react-router-dom v7 + Tailwind CSS v4 + @headlessui/react + 自建 HTTP 客户端
 - 数据库：PostgreSQL（SQLModel ORM + LangGraph Checkpoint）
@@ -55,12 +56,12 @@ research/
 > 按需加载：不要在会话开始时预读所有文件，而是根据当前任务的实际需要，读取对应的记忆文件。
 > 记忆文件内容视为强制指令，加载后必须遵守。
 
-| 文件 | 内容 | 何时加载 |
-|------|------|---------|
-| [后端架构](./.opencode/memory/backend.md) | 后端目录、启动流程、数据库、Result 规范 | 涉及后端代码、API 路由、数据库操作时 |
-| [Agent 系统](./.opencode/memory/agent.md) | Chat Agent、Research Agent、图拓扑、节点说明 | 涉及 Agent 逻辑、工具调用、LangGraph 时 |
-| [认证系统](./.opencode/memory/auth.md) | 前后端认证流程、token 管理、API 客户端 | 涉及登录、注册、token、权限相关时 |
-| [前端架构](./.opencode/memory/frontend.md) | 路由、页面、组件、数据流 | 涉及前端代码、页面、组件、路由时 |
+| 文件                                    | 内容                                         | 何时加载                                |
+| --------------------------------------- | -------------------------------------------- | --------------------------------------- |
+| [后端架构](./.opencode/memory/backend.md)  | 后端目录、启动流程、数据库、Result 规范      | 涉及后端代码、API 路由、数据库操作时    |
+| [Agent 系统](./.opencode/memory/agent.md)  | Chat Agent、Research Agent、图拓扑、节点说明 | 涉及 Agent 逻辑、工具调用、LangGraph 时 |
+| [认证系统](./.opencode/memory/auth.md)     | 前后端认证流程、token 管理、API 客户端       | 涉及登录、注册、token、权限相关时       |
+| [前端架构](./.opencode/memory/frontend.md) | 路由、页面、组件、数据流                     | 涉及前端代码、页面、组件、路由时        |
 
 ## 代码规范
 
@@ -76,7 +77,7 @@ research/
 
 ## 关键端口和地址
 
-- 后端服务：`http://localhost:4030`
+- 后端服务：`http://localhost:7900`
 - 前端开发：`http://localhost:5173`（Vite 默认）
 - PostgreSQL：通过 `PGSQL_DB_URI` 环境变量配置
 - Milvus：通过 `MILVUS_URI` 环境变量配置（默认 `http://localhost:19530`）
@@ -85,6 +86,7 @@ research/
 ## 环境变量
 
 参考 `.env.example`，关键字段：
+
 - `DEEPSEEK_API_KEY` / `TAVILY_API_KEY` — LLM 和搜索 API
 - `LLM_BASE_URL` / `LLM_MODEL` — 默认 DeepSeek
 - `FULLAUTH_SECRET_KEY` — JWT 签名密钥（>=32 字节，必须固定）
