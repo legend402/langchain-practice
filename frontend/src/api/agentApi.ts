@@ -1,3 +1,4 @@
+import { isEmpty } from "radash";
 import type {
   SubmitRequest,
   SSEEventData,
@@ -61,7 +62,7 @@ function parseMessages(rows: ChatMessageFromDB[]): ChatMessage[] {
     .filter((r) => {
       if (r.role === "human" || r.role === "user") return true;
       const nodeName = r.node_name || extractNodeName(r.state);
-      return nodeName !== "supervisor" && nodeName !== "tools" && nodeName !== "human";
+      return nodeName !== "supervisor" && nodeName !== "tools" && nodeName !== "human" && !(nodeName === "chat" && isEmpty(r.content));
     })
     .map((r) => {
       const role: "human" | "ai" = (r.role === "user" || r.role === "human") ? "human" : "ai";

@@ -8,6 +8,7 @@ import logoSvg from "../../assets/logo.svg";
 import SearchForm from "../../components/SearchForm";
 import MessageList from "../../components/MessageList";
 import HumanFeedbackPanel from "../../components/HumanFeedbackPanel";
+import { isEmpty as isEmptyObject } from "radash";
 
 export default function ChatPage() {
   const chat = useChatContext();
@@ -42,7 +43,7 @@ export default function ChatPage() {
     />
   );
 
-  const feedbackPanel = chat.humanInterrupt && (
+  const feedbackPanel = !isEmptyObject(chat.humanInterrupt) && (
     <HumanFeedbackPanel
       interrupt={chat.humanInterrupt}
       onSubmit={(feedback: FeedbackRequest) => chat.submitFeedback(feedback)}
@@ -86,7 +87,7 @@ export default function ChatPage() {
               activeThreadId={session.activeThreadId}
             />
             <div className="shrink-0 pb-4 pt-0 space-y-3">
-              {chat.humanInterrupt ? feedbackPanel : searchForm}
+              {!isEmptyObject(chat.humanInterrupt) ? feedbackPanel : searchForm}
             </div>
           </>
         )}

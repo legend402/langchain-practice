@@ -33,7 +33,9 @@ class ChatFeedback(BaseModel):
 
 
 @router.get("/sessions")
-async def chat_sessions(user: CurrentUser, session: AsyncSession = Depends(get_session)):
+async def chat_sessions(
+    user: CurrentUser, session: AsyncSession = Depends(get_session)
+):
     result = await session.exec(
         select(ChatSession)
         .where(ChatSession.user_id == user.id)
@@ -60,7 +62,9 @@ async def chat_messages(thread_id: str, session: AsyncSession = Depends(get_sess
 
 
 @router.post("/start")
-async def chat_start(body: ChatStart, user: CurrentUser, session: AsyncSession = Depends(get_session)):
+async def chat_start(
+    body: ChatStart, user: CurrentUser, session: AsyncSession = Depends(get_session)
+):
     from src.service import get_app
 
     app = get_app()
@@ -116,12 +120,14 @@ async def chat_stop(thread_id: str):
 
 
 @router.post("/{session_id}/feedback")
-async def chat_feedback(session_id: str, body: ChatFeedback):
+async def chat_feedback(session_id: str, user: CurrentUser, body: ChatFeedback):
     from src.service import get_app
     from langgraph.types import Command
 
     app = get_app()
     agent = app.state.agent
+    # 用户id上下文注入
+    set_current_user_id(str(user.id))
 
     return StreamingResponse(
         event_generator(

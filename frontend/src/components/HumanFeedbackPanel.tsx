@@ -38,7 +38,6 @@ function ConfirmPanel({
   onSubmit: (feedback: FeedbackRequest) => void;
   loading: boolean;
 }) {
-  const [comment, setComment] = useState("");
   const item = items[0];
   if (!item) return null;
 
@@ -46,24 +45,16 @@ function ConfirmPanel({
     <div className="glass-card px-5 py-4">
       <h3 className="text-base font-semibold text-ink-100 mb-1">{item.title}</h3>
       <p className="text-sm text-ink-400 mb-4">{item.description}</p>
-      <textarea
-        value={comment}
-        onChange={(e) => setComment(e.target.value)}
-        placeholder="补充说明（可选）"
-        disabled={loading}
-        rows={2}
-        className="w-full bg-white/50 border border-white/60 rounded-xl px-4 py-2.5 text-sm text-ink-100 placeholder:text-ink-600 focus:outline-none focus:border-accent/50 disabled:opacity-50 resize-none mb-3"
-      />
       <div className="flex gap-3">
         <button
-          onClick={() => onSubmit({ type: "confirm", items: [{ item_index: 0, confirmed: true, comment: comment.trim() || undefined }] })}
+          onClick={() => onSubmit({ type: "confirm", items: [{ item_index: 0, confirmed: true }] })}
           disabled={loading}
           className="flex-1 px-4 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           确认
         </button>
         <button
-          onClick={() => onSubmit({ type: "confirm", items: [{ item_index: 0, confirmed: false, comment: comment.trim() || undefined }] })}
+          onClick={() => onSubmit({ type: "confirm", items: [{ item_index: 0, confirmed: false }] })}
           disabled={loading}
           className="flex-1 px-4 py-2.5 rounded-xl bg-white/50 text-ink-400 text-sm font-medium hover:bg-white/70 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >

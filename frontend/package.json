@@ -16,6 +16,7 @@
     "node-forge": "^1.4.0",
     "overlayscrollbars": "^2.16.0",
     "overlayscrollbars-react": "^0.5.6",
+    "radash": "^12.1.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-markdown": "^10.1.0",

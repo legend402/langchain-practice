@@ -10,6 +10,13 @@ from src.tools.research import research
 # 需要确认的工具白名单
 TOOLS_REQUIRING_CONFIRM = {"research", "save_to_knowledge", "knowledge_search"}
 
+TOOLS_MAP = {
+    "knowledge_search": knowledge_search,
+    "research": research,
+    "save_to_knowledge": save_to_knowledge,
+    "read_file": read_file,
+}
+
 CHAT_SYSTEM_PROMPT = """
 你是一个知识助手。你可以：
 1. 直接回答用户的简单问题（闲聊、解释概念、提供建议）
@@ -19,7 +26,8 @@ CHAT_SYSTEM_PROMPT = """
 5. 调用 save_to_knowledge 将内容存入知识库
 
 规则：
-- 当工具需要人工确认时，先调用request_human_review工具，进行人工确认，以下工具需要确认：{tools}
+- 当你判断存在多种可行方案需要用户选择时，调用 request_human_review 工具（如选择研究方式、知识库分类等）
+- {tools} 工具会自动触发用户确认，你不需要额外调用 request_human_review
 - 当用户要求输出流程图或者你认为输出内容比较适合流程图展示的时候，可以用```mermaid 和 ```包裹的代码块，其中要求输出mermaid库的输出格式
 - 用户消息附带附件时，必须先调用 read_file 获取文件内容，然后根据用户意图处理
 - 根据用户意图决定是否调用 save_to_knowledge
@@ -35,7 +43,9 @@ CHAT_SYSTEM_PROMPT = """
 
 async def chat_node(state: ChatState) -> dict:
     llm = init_model()
-    llm_with_tools = llm.bind_tools([research, knowledge_search, read_file, save_to_knowledge, request_human_review])
+    llm_with_tools = llm.bind_tools(
+        [research, knowledge_search, read_file, save_to_knowledge, request_human_review]
+    )
 
     state_messages = state.get("messages", [])
     existing_messages = []
@@ -53,18 +63,20 @@ async def chat_node(state: ChatState) -> dict:
         "messages": [response],
     }
 
+
 def route_chat_node(state: ChatState) -> str:
     last_message = state["messages"][-1]
     tool_calls = getattr(last_message, "tool_calls", None)
     if not tool_calls:
         return END
-    
+
     tool_names = [tc["name"] for tc in tool_calls]
 
     needs_confirm = any(name in TOOLS_REQUIRING_CONFIRM for name in tool_names)
     if "request_human_review" in tool_names or needs_confirm:
         return "human"
     return "tools"
+
 
 def _sanitize_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
     """修复孤立 tool_calls：为没有对应 ToolMessage 的 tool_call 补占位响应"""
@@ -74,13 +86,14 @@ def _sanitize_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
         if isinstance(msg, AIMessage) and msg.tool_calls:
             # 收集后续所有 ToolMessage 的 tool_call_id
             following_tool_ids = {
-                m.tool_call_id for m in messages[i + 1:] if isinstance(m, ToolMessage)
+                m.tool_call_id for m in messages[i + 1 :] if isinstance(m, ToolMessage)
             }
             # 为缺少 ToolMessage 的 tool_call 补占位
             for tc in msg.tool_calls:
                 if tc["id"] not in following_tool_ids:
-                    result.append(ToolMessage(
-                        content="[工具执行结果未记录]",
-                        tool_call_id=tc["id"]
-                    ))
+                    result.append(
+                        ToolMessage(
+                            content="[工具执行结果未记录]", tool_call_id=tc["id"]
+                        )
+                    )
     return result

@@ -374,12 +374,10 @@ export function useAgentChat() {
           timestamp: Date.now(),
         });
       } finally {
-        if (!humanInterrupt) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     },
-    [activeThreadId, handleMessage, refreshSessions, addMessage, humanInterrupt],
+    [activeThreadId, handleMessage, refreshSessions, addMessage],
   );
 
   return {
