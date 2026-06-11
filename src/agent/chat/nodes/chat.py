@@ -8,7 +8,7 @@ from src.tools.human_review import request_human_review
 from src.tools.research import research
 
 # 需要确认的工具白名单
-TOOLS_REQUIRING_CONFIRM = {"research", "save_to_knowledge"}
+TOOLS_REQUIRING_CONFIRM = {"research", "save_to_knowledge", "knowledge_search"}
 
 CHAT_SYSTEM_PROMPT = """
 你是一个知识助手。你可以：
@@ -55,10 +55,11 @@ async def chat_node(state: ChatState) -> dict:
 
 def route_chat_node(state: ChatState) -> str:
     last_message = state["messages"][-1]
-    if not last_message.tool_calls:
+    tool_calls = getattr(last_message, "tool_calls", None)
+    if not tool_calls:
         return END
     
-    tool_names = [tc["name"] for tc in last_message.tool_calls]
+    tool_names = [tc["name"] for tc in tool_calls]
 
     needs_confirm = any(name in TOOLS_REQUIRING_CONFIRM for name in tool_names)
     if "request_human_review" in tool_names or needs_confirm:

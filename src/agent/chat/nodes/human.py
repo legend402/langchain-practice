@@ -78,12 +78,15 @@ async def human_node(state: ChatState) -> dict:
     llm = init_model()
 
     state_messages = state.get("messages", [])
-    tool_calls = state_messages[-1].tool_calls
+    last_msg = state_messages[-1]
+    tool_calls = getattr(last_msg, "tool_calls", None) or []
+
+    if not tool_calls:
+        return {"messages": [AIMessage(content="没有待确认的工具调用")]}
+
     tool_names = [tc["name"] for tc in tool_calls]
     if "request_human_review" not in tool_names:
-        return {
-            "message": [AIMessage(content="未收到工人审核工具节点的通知")]
-        }
+        return {"messages": [AIMessage(content="未收到工人审核工具节点的通知")]}
     
     messages = [SystemMessage(content=HUMAN_SYSTEM_PROMPT), AIMessage(content=json.dumps(tool_calls[0]["args"]))]
 

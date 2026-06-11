@@ -27,7 +27,7 @@ async def event_generator(
         async for mode, state in agent.astream(
             initial_state, config, stream_mode=["updates", "custom", "messages"]
         ):
-            if "__interrupt__" in state:
+            if state is not None and isinstance(state, dict) and "__interrupt__" in state:
                 interrupt_state = {
                     "human": state["__interrupt__"][0].value,
                     "session_id": session_id,
