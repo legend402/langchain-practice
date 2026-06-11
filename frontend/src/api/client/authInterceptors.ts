@@ -19,7 +19,7 @@ export function createAuthInterceptors(tokenStorage: TokenStorage): {
     const refreshToken = tokenStorage.getRefreshToken();
     if (!refreshToken) return false;
     try {
-      const res = await httpClient.raw("/api/v1/auth/refresh", {
+      const res = await httpClient.raw("/v1/auth/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken }),

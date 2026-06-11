@@ -77,9 +77,9 @@ def create_agent_service():
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.include_router(chat_router)
-    app.include_router(upload_router)
-    app.include_router(knowledge_router)
+    app.include_router(chat_router, prefix="/api")
+    app.include_router(upload_router, prefix="/api")
+    app.include_router(knowledge_router, prefix="/api")
     app.include_router(auth_router, prefix="/api/v1")
     return app
 

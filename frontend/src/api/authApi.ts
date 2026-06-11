@@ -36,7 +36,7 @@ export const authApi = {
    */
   async login(data: LoginRequest): Promise<AuthResponse> {
     const { encrypted, key_id } = await encryptPassword(data.password);
-    const res = await httpClient.raw("/api/v1/auth/login", {
+    const res = await httpClient.raw("/v1/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ login: data.login, password: encrypted, key_id }),
@@ -58,7 +58,7 @@ export const authApi = {
    */
   async register(data: RegisterRequest): Promise<AuthResponse> {
     const { encrypted, key_id } = await encryptPassword(data.password);
-    const res = await httpClient.raw("/api/v1/auth/register", {
+    const res = await httpClient.raw("/v1/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -81,7 +81,7 @@ export const authApi = {
     const refreshToken = tokenStorage.getRefreshToken();
     if (!refreshToken) return false;
     try {
-      const res = await httpClient.raw("/api/v1/auth/refresh", {
+      const res = await httpClient.raw("/v1/auth/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken }),
@@ -112,7 +112,7 @@ export const authApi = {
     const refreshToken = tokenStorage.getRefreshToken();
     if (refreshToken) {
       try {
-        await httpClient.post<ApiResult>("/api/v1/auth/logout", {
+        await httpClient.post<ApiResult>("/v1/auth/logout", {
           refresh_token: refreshToken,
         });
       } catch {}
@@ -124,7 +124,7 @@ export const authApi = {
    * 获取当前用户信息
    */
   async getMe(): Promise<AuthUser> {
-    const { data } = await httpClient.get<AuthUser>("/api/v1/auth/me");
+    const { data } = await httpClient.get<AuthUser>("/v1/auth/me");
     return data;
   },
 };

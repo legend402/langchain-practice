@@ -1,7 +1,7 @@
 import forge from "node-forge";
 import { httpClient } from "./client";
 
-const PUBLIC_KEY_URL = "/api/v1/auth/public-key";
+const PUBLIC_KEY_URL = "/v1/auth/public-key";
 const REFRESH_AHEAD_MS = 5 * 60 * 1000;
 
 interface PublicKeyResponse {
