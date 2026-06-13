@@ -8,7 +8,7 @@ from src.tools.human_review import request_human_review
 from src.tools.research import research
 
 # 需要确认的工具白名单
-TOOLS_REQUIRING_CONFIRM = {"research", "save_to_knowledge", "knowledge_search"}
+TOOLS_REQUIRING_CONFIRM = {"research", "save_to_knowledge"}
 
 TOOLS_MAP = {
     "knowledge_search": knowledge_search,

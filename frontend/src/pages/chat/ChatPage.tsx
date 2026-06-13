@@ -45,7 +45,7 @@ export default function ChatPage() {
 
   const feedbackPanel = !isEmptyObject(chat.humanInterrupt) && (
     <HumanFeedbackPanel
-      interrupt={chat.humanInterrupt}
+      interrupt={chat.humanInterrupt!}
       onSubmit={(feedback: FeedbackRequest) => chat.submitFeedback(feedback)}
       loading={chat.loading}
     />
@@ -53,14 +53,12 @@ export default function ChatPage() {
 
   return (
     <div
-      className={`flex-1 flex flex-col min-w-0 h-screen main-area ${
-        sidebar.collapsed ? "sidebar-collapsed" : "sidebar-expanded"
-      }`}
+      className={`flex-1 flex flex-col min-w-0 h-screen main-area ${sidebar.collapsed ? "sidebar-collapsed" : "sidebar-expanded"
+        }`}
     >
       <main
-        className={`max-w-3xl w-full mx-auto px-4 overflow-hidden ${
-          isEmpty ? "flex flex-col items-center justify-center h-screen" : "flex flex-col h-screen"
-        }`}
+        className={`max-w-3xl w-full mx-auto px-4 overflow-hidden ${isEmpty ? "flex flex-col items-center justify-center h-screen" : "flex flex-col h-screen"
+          }`}
       >
         {isEmpty ? (
           <div className="flex flex-col items-center gap-6 w-full -mt-16">
